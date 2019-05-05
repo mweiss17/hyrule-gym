@@ -37,15 +37,19 @@ def get_direction(i):
 class Manifest:
 
     def __init__(self, images_path='', hdf_path='', coords=[], dataset="Default", image_type=""):
-
-        paths = glob.glob(images_path+"/*.png")[:10]
+        if os.path.isfile(hdf_path):
+            import pdb; pdb.set_trace()
+            self.df = pd.read_hdf(hdf_path)
+            return
+        paths = glob.glob(images_path+"/*.png")
         i=0
         frames = []
         cameras = []
+        thumbnails = []
         x = []
         y = []
         z = []
-        for path in tqdm(paths, desc="Loading Images into Memory"):
+        for path in tqdm(paths, desc="Loading thumbnails"):
             i += 1
 
             try:
@@ -61,12 +65,17 @@ class Manifest:
             x.append(i/8 + i % 8 + np.random.normal(loc=0.0, scale=1.0, size=None))
             y.append(i/8 + i % 8 + np.random.normal(loc=0.0, scale=1.0, size=None))
             z.append(i/8 + i % 8 + np.random.normal(loc=0.0, scale=1.0, size=None))
+            image = cv2.imread(path)
+            image = cv2.resize(image, (0,0), fx=0.1, fy=0.1)
+            thumbnails.append(image)
+
         self.df = pd.DataFrame({"x": x,
                                 "y": y,
                                 "z": z,
                                 "path": paths,
                                 "camera": cameras,
-                                "frame": frames})
+                                "frame": frames,
+                                "thumbnail": thumbnails})
         self.df.to_hdf(hdf_path, key="df", index=False)
 
 
@@ -74,6 +83,7 @@ class HyruleEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array']}
 
     class Actions(enum.IntEnum):
+        NOOP = -1
         LEFT_BIG = 0
         LEFT_SMALL = 1
         FORWARD = 2
@@ -133,16 +143,16 @@ class HyruleEnv(gym.Env):
 
     def turn(self, action):
         action = self._action_set(action)
-        print(action)
-        print(self.agent_dir)
+        # print(action)
+        # print(self.agent_dir)
         if action == self.Actions.LEFT_BIG:
             self.agent_dir -= (1/3)
         if action == self.Actions.LEFT_SMALL:
             self.agent_dir -= (1/9)
-        if action == self.Actions.RIGHT_BIG:
-            self.agent_dir += (1/3)
         if action == self.Actions.RIGHT_SMALL:
             self.agent_dir += (1/9)
+        if action == self.Actions.RIGHT_BIG:
+            self.agent_dir += (1/3)
         self.agent_dir = self.agent_dir % 1
 
     def seed(self, seed=None):
@@ -164,23 +174,26 @@ class HyruleEnv(gym.Env):
         else:
             self.edges = [edge[1] for edge in list(self.G.edges(self.agent_pos))]
             dirs = {}
+            print("my coords: " + str(self.G.nodes[self.agent_pos]['coords']))
             for e in self.edges:
-                dirs[e] = self.G.nodes[e]['coords'][0] - self.G.nodes[self.agent_pos]['coords'][0]
+                print("e: " + str(self.G.nodes[e]['coords']) )
+                a = self.G.nodes[e]['coords'][0] - self.G.nodes[self.agent_pos]['coords'][0]
+                h = np.linalg.norm(self.G.nodes[e]['coords'][0:2] - self.G.nodes[self.agent_pos]['coords'][0:2])
+                if np.abs(self.agent_dir - np.cos(a/h)) < 0.2:
+                    self.agent_pos = e
+                    break
+
         ob = self._get_obs()
         done = False
         return ob, reward, done, {}
 
     def _get_image(self):
-        path = self.m.df.iloc[self.agent_pos]['path']
+        image = self.m.df.iloc[self.agent_pos]['thumbnail']
 
-        image = cv2.imread(path)
-        image = cv2.resize(image, (0,0), fx=0.1, fy=0.1)
         x = int(image.shape[1] * self.agent_dir)
         w = int(image.shape[1] * (120/360))
         y = image.shape[0]
         h = int(image.shape[0] * (60/360))
-        # left side
-
 
         if (x + w) % image.shape[1] != (x + w):
             img = np.zeros((y - 2*h, w, 3))
@@ -287,6 +300,7 @@ class HyruleEnv(gym.Env):
 
 
 ACTION_MEANING = {
+    -1: 'NOOP',
     0: 'LEFT_BIG',
     1: 'LEFT_SMALL',
     2: 'FORWARD',

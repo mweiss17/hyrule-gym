@@ -2,6 +2,7 @@ import gym
 import pygame
 import matplotlib
 import argparse
+import time
 from gym import logger
 try:
     matplotlib.use('TkAgg')
@@ -88,7 +89,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
             assert False, env.spec.id + " does not have explicit key to action mapping, " + \
                           "please specify one manually"
     relevant_keys = set(sum(map(list, keys_to_action.keys()),[]))
-    video_size=[rendered.shape[1],rendered.shape[0]]
+    video_size=[rendered.shape[1], rendered.shape[0]]
     if zoom is not None:
         video_size = int(video_size[0] * zoom), int(video_size[1] * zoom)
 
@@ -100,20 +101,19 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
     clock = pygame.time.Clock()
 
     f=0
-    import time
     start = time.time()
     while running:
         f += 1
-        print("fps: " +str(f))
-
+        # print(time.time() - start)
         if time.time() - start > 1:
+            print("fps: " +str(f))
             start = time.time()
             f=0
         if env_done:
             env_done = False
             obs = env.reset()
         else:
-            action = keys_to_action.get(tuple(sorted(pressed_keys)), 2)
+            action = keys_to_action.get(tuple(sorted(pressed_keys)), -1)
             prev_obs = obs
             obs, rew, env_done, info = env.step(action)
             if callback is not None:
@@ -182,7 +182,7 @@ def main():
     parser.add_argument('--env', type=str, default='Hyrule-v0', help='Define Environment')
     args = parser.parse_args()
     env = gym.make(args.env)
-    play(env, zoom=4, fps=60)
+    play(env, zoom=4, fps=600)
 
 
 if __name__ == '__main__':
