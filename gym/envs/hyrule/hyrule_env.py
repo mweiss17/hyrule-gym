@@ -98,8 +98,8 @@ class HyruleEnv(gym.Env):
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
 
-        screen_height = 840
-        screen_width = 840
+        screen_height = 84
+        screen_width = 84
 
         if self._obs_type == 'image':
             self.observation_space = spaces.Box(low=0, high=255, shape=(screen_height, screen_width, 3), dtype=np.uint8)
@@ -133,14 +133,17 @@ class HyruleEnv(gym.Env):
 
     def turn(self, action):
         action = self._action_set(action)
+        print(action)
+        print(self.agent_dir)
         if action == self.Actions.LEFT_BIG:
             self.agent_dir -= (1/3)
         if action == self.Actions.LEFT_SMALL:
-            self.agent_dir -= -(1/9)
-        if action == self.Actions.RIGHT_BIG:
             self.agent_dir -= (1/9)
+        if action == self.Actions.RIGHT_BIG:
+            self.agent_dir += (1/3)
         if action == self.Actions.RIGHT_SMALL:
-            self.agent_dir -= (1/3)
+            self.agent_dir += (1/9)
+        self.agent_dir = self.agent_dir % 1
 
     def seed(self, seed=None):
         self.np_random, seed1 = seeding.np_random(seed)
@@ -169,22 +172,27 @@ class HyruleEnv(gym.Env):
 
     def _get_image(self):
         path = self.m.df.iloc[self.agent_pos]['path']
-        print(path)
-        if self.agent_dir < 0:
-            self.agent_dir = 1 - self.agent_dir
-        elif self.agent_dir > 1:
-            self.agent_dir = self.agent_dir - 1
 
         image = cv2.imread(path)
-        image = cv2.resize(image, (0,0), fx=0.15, fy=0.15)
-
+        image = cv2.resize(image, (0,0), fx=0.1, fy=0.1)
         x = int(image.shape[1] * self.agent_dir)
-        x = x if x > 0 else image.shape[1] - int(image.shape[1] * self.agent_dir)
-        y = image.shape[0]
-        h = int(image.shape[0] * (30/360))
         w = int(image.shape[1] * (120/360))
-        crop_img = image[h:y - h, x:x + w]
-        return crop_img
+        y = image.shape[0]
+        h = int(image.shape[0] * (60/360))
+        # left side
+
+
+        if (x + w) % image.shape[1] != (x + w):
+            img = np.zeros((y - 2*h, w, 3))
+
+            offset = (x + w) % image.shape[1]
+            offset1 = image.shape[1] - x
+
+            img[:y - 2*h, :offset1, :] = image[h:y - h, x:x + offset1]
+            img[:y - 2*h, offset1:, :] = image[h:y - h, :offset]
+        else:
+            img = image[h:y - h, x:x + w]
+        return img
 
 
 
@@ -231,6 +239,7 @@ class HyruleEnv(gym.Env):
             'FORWARD': ord('d'),
             'RIGHT_SMALL': ord('f'),
             'RIGHT_BIG': ord(' '),
+            'NOOP': ord('n'),
         }
 
         keys_to_action = {}

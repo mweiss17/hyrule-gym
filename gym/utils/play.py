@@ -99,8 +99,16 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
     screen = pygame.display.set_mode(video_size)
     clock = pygame.time.Clock()
 
-
+    f=0
+    import time
+    start = time.time()
     while running:
+        f += 1
+        print("fps: " +str(f))
+
+        if time.time() - start > 1:
+            start = time.time()
+            f=0
         if env_done:
             env_done = False
             obs = env.reset()
@@ -111,8 +119,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
             if callback is not None:
                 callback(prev_obs, obs, action, rew, env_done, info)
         if obs is not None:
-            rendered=env.render( mode='rgb_array')
-            print(rendered.shape)
+            rendered = env.render(mode='rgb_array')
             display_arr(screen, rendered, transpose=transpose, video_size=video_size)
 
         # process pygame events
@@ -169,6 +176,7 @@ class PlayPlot(object):
             self.cur_plot[i] = self.ax[i].scatter(range(xmin, xmax), list(self.data[i]), c='blue')
             self.ax[i].set_xlim(xmin, xmax)
         plt.pause(0.000001)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', type=str, default='Hyrule-v0', help='Define Environment')
