@@ -113,7 +113,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
             env_done = False
             obs = env.reset()
         else:
-            action = keys_to_action.get(tuple(sorted(pressed_keys)), -1)
+            action = keys_to_action.get(tuple(sorted(pressed_keys)), 5)
             prev_obs = obs
             obs, rew, env_done, info = env.step(action)
             if callback is not None:
@@ -182,7 +182,7 @@ def main():
     parser.add_argument('--env', type=str, default='Hyrule-v0', help='Define Environment')
     args = parser.parse_args()
     env = gym.make(args.env)
-    play(env, zoom=4, fps=600)
+    play(env, zoom=4, fps=6)
 
 
 if __name__ == '__main__':

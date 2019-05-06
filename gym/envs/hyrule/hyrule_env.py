@@ -38,7 +38,6 @@ class Manifest:
 
     def __init__(self, images_path='', hdf_path='', coords=[], dataset="Default", image_type=""):
         if os.path.isfile(hdf_path):
-            import pdb; pdb.set_trace()
             self.df = pd.read_hdf(hdf_path)
             return
         paths = glob.glob(images_path+"/*.png")
@@ -83,12 +82,12 @@ class HyruleEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array']}
 
     class Actions(enum.IntEnum):
-        NOOP = -1
         LEFT_BIG = 0
         LEFT_SMALL = 1
         FORWARD = 2
         RIGHT_SMALL = 3
         RIGHT_BIG = 4
+        NOOP = 5
 
     def __init__(
             self,
@@ -169,14 +168,15 @@ class HyruleEnv(gym.Env):
     def step(self, a):
         reward = 0.0
         action = self._action_set(a)
+
         if action != self.Actions.FORWARD:
             self.turn(action)
-        else:
+        elif action == self.Actions.FORWARD:
             self.edges = [edge[1] for edge in list(self.G.edges(self.agent_pos))]
             dirs = {}
-            print("my coords: " + str(self.G.nodes[self.agent_pos]['coords']))
+            # print("my coords: " + str(self.G.nodes[self.agent_pos]['coords']))
             for e in self.edges:
-                print("e: " + str(self.G.nodes[e]['coords']) )
+                # print("e: " + str(self.G.nodes[e]['coords']) )
                 a = self.G.nodes[e]['coords'][0] - self.G.nodes[self.agent_pos]['coords'][0]
                 h = np.linalg.norm(self.G.nodes[e]['coords'][0:2] - self.G.nodes[self.agent_pos]['coords'][0:2])
                 if np.abs(self.agent_dir - np.cos(a/h)) < 0.2:
@@ -300,10 +300,10 @@ class HyruleEnv(gym.Env):
 
 
 ACTION_MEANING = {
-    -1: 'NOOP',
     0: 'LEFT_BIG',
     1: 'LEFT_SMALL',
     2: 'FORWARD',
     3: 'RIGHT_SMALL',
     4: 'RIGHT_BIG',
+    5: 'NOOP'
 }
