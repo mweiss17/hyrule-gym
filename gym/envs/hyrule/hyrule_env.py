@@ -18,7 +18,7 @@ import cv2
 import glob
 import networkx as nx
 from tqdm import tqdm
-from enum import Enum, auto
+from enum import Enum
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import random
@@ -38,7 +38,7 @@ class Manifest:
 
     def __init__(self, images_path='', hdf_path='', coords=[], dataset="Default", image_type=""):
         if os.path.isfile(hdf_path):
-            self.df = pd.read_hdf(hdf_path)
+            self.df = pd.read_hdf(hdf_path, key='df', mode='r')
             return
         paths = glob.glob(images_path+"/*.png")
         i=0
@@ -205,6 +205,8 @@ class HyruleEnv(gym.Env):
             img[:y - 2*h, offset1:, :] = image[h:y - h, :offset]
         else:
             img = image[h:y - h, x:x + w]
+        img = img[:,:,::-1]
+
         return img
 
 
