@@ -129,7 +129,17 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
                 callback(prev_obs, obs, action, rew, env_done, info)
         if obs is not None:
             rendered = env.render(mode='rgb_array')
-            display_text(screen, "heyo", video_size)
+
+            # Should move this to manifest and read it in
+            pano_width = 3840
+            pano_height = 2160
+            label = env.labels.df.iloc[env.agent_pos]
+            coords = label['coords']
+
+            rel_coords = (int(coords[0]) / pano_width, int(coords[1]) / pano_width, int(coords[2]) / pano_height, int(coords[3]) / pano_height)
+            if rel_coords[0] - env.agent_dir > 0 and rel_coords[1] < env.agent_dir + (1/3):
+                text = label['obj_type'] + ": " + label.get('house_number', '')
+                display_text(screen, text, video_size)
             display_arr(screen, rendered, transpose=transpose, video_size=video_size)
 
         # process pygame events

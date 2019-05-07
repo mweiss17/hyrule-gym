@@ -22,7 +22,7 @@ from enum import Enum
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import random
-import xml.etree.ElementTree as et 
+import xml.etree.ElementTree as et
 
 def get_direction(i):
     if i == 0 or i == 1:
@@ -39,7 +39,7 @@ class Manifest:
 
     def __init__(self, images_path='', hdf_path='', coords=[], dataset="Default", image_type=""):
         if os.path.isfile(hdf_path):
-            self.df = pd.read_hdf(hdf_path, key='df', mode='r')
+            self.df = pd.read_hdf(hdf_path, key='df', mode='r')[:10]
             return
         paths = glob.glob(images_path+"/*.png")
         i=0
@@ -80,7 +80,7 @@ class Manifest:
 
 
 class Labels:
-    
+
     def __init__(self, path):
         paths = glob.glob(path)
         labels = {}
@@ -89,7 +89,7 @@ class Labels:
             frame = path.split(" ")[1]
             xtree = et.parse(path)
             xroot = xtree.getroot()
-            for node in xroot: 
+            for node in xroot:
                 if node.tag == "object":
                     name = node.find("name").text
                     try:
