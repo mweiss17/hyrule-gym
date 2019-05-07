@@ -21,6 +21,13 @@ def display_arr(screen, arr, video_size, transpose):
     pyg_img = pygame.transform.scale(pyg_img, video_size)
     screen.blit(pyg_img, (0,0))
 
+def display_text(screen, text, video_size):
+    textSurface = pygame.font.Font('freesansbold.ttf',30).render(text, True, (0,0,0))
+    textRect = textSurface.get_rect()
+    textRect.center = (video_size[0]/10, video_size[1]/10)
+    screen.blit(textSurface, textRect)
+    pygame.display.update()
+
 def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=None):
     """Allows one to play the game using keyboard.
 
@@ -97,8 +104,10 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
     running = True
     env_done = True
 
+    pygame.font.init()
     screen = pygame.display.set_mode(video_size)
     clock = pygame.time.Clock()
+    pygame.display.set_caption('NAVI')
 
     f=0
     start = time.time()
@@ -120,6 +129,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
                 callback(prev_obs, obs, action, rew, env_done, info)
         if obs is not None:
             rendered = env.render(mode='rgb_array')
+            display_text(screen, "heyo", video_size)
             display_arr(screen, rendered, transpose=transpose, video_size=video_size)
 
         # process pygame events
