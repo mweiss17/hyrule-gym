@@ -22,6 +22,7 @@ from enum import Enum
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import random
+import xml.etree.ElementTree as et 
 
 def get_direction(i):
     if i == 0 or i == 1:
@@ -78,6 +79,36 @@ class Manifest:
         self.df.to_hdf(hdf_path, key="df", index=False)
 
 
+class Labels:
+    
+    def __init__(self, path):
+        paths = glob.glob(path)
+        labels = {}
+
+        for path in paths:
+            frame = path.split(" ")[1]
+            xtree = et.parse(path)
+            xroot = xtree.getroot()
+            for node in xroot: 
+                if node.tag == "object":
+                    name = node.find("name").text
+                    try:
+                        object_type, val = name.split("-")
+                    except ValueError:
+                        val = None
+                        object_type = name
+
+                    bndbox = (node.find("bndbox").find("xmin").text, node.find("bndbox").find("xmax").text, node.find("bndbox").find("ymin").text, node.find("bndbox").find("ymax").text)
+
+                    labels[frame] = (object_type, val, bndbox)
+        df = pd.DataFrame(labels).T
+        df.columns = ["obj_type", "house_number", "coords"]
+        df.index.name = "frame"
+        df.to_hdf(path + "labels.hdf5", key="df", index=False)
+        self.df = df
+
+
+
 class HyruleEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array']}
 
@@ -116,7 +147,10 @@ class HyruleEnv(gym.Env):
             raise error.Error('Unrecognized observation type: {}'.format(self._obs_type))
 
         self.m = Manifest(path, hdf_path)
+        self.labels = Labels(path+ "labels/*.xml")
+        self.G = self.construct_spatial_graph()
 
+    def construct_spatial_graph(self):
         G = nx.Graph()
         G.add_nodes_from(self.m.df.index)
         max_node_distance = 20
@@ -138,7 +172,7 @@ class HyruleEnv(gym.Env):
                 if np.linalg.norm(coords1 - coords2) < max_node_distance:
                     edge_pos.append((coords1, coords2))
                     G.add_edge(node1, node2, weight=np.linalg.norm(coords1-coords2))
-        self.G = G
+        return G
 
     def turn(self, action):
         action = self._action_set(action)
@@ -174,9 +208,7 @@ class HyruleEnv(gym.Env):
         elif action == self.Actions.FORWARD:
             self.edges = [edge[1] for edge in list(self.G.edges(self.agent_pos))]
             dirs = {}
-            # print("my coords: " + str(self.G.nodes[self.agent_pos]['coords']))
             for e in self.edges:
-                # print("e: " + str(self.G.nodes[e]['coords']) )
                 a = self.G.nodes[e]['coords'][0] - self.G.nodes[self.agent_pos]['coords'][0]
                 h = np.linalg.norm(self.G.nodes[e]['coords'][0:2] - self.G.nodes[self.agent_pos]['coords'][0:2])
                 if np.abs(self.agent_dir - np.cos(a/h)) < 0.2:
