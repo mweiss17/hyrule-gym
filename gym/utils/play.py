@@ -28,6 +28,15 @@ def display_text(screen, text, video_size):
     screen.blit(textSurface, textRect)
     pygame.display.update()
 
+def display_bb(screen, rel_coords, text, video_size):
+    textSurface = pygame.font.Font('freesansbold.ttf',30).render(text, True, (0,0,0))
+    textRect = textSurface.get_rect()
+    BLUE=(0,0,255)
+    pygame.draw.rect(screen, BLUE, rel_coords)
+    textRect.center = (video_size[0]/10, video_size[1]/10)
+    screen.blit(textSurface, textRect)
+    pygame.display.update()
+
 def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=None):
     """Allows one to play the game using keyboard.
 
@@ -113,7 +122,6 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
     start = time.time()
     while running:
         f += 1
-        # print(time.time() - start)
         if time.time() - start > 1:
             print("fps: " +str(f))
             start = time.time()
@@ -129,17 +137,10 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
                 callback(prev_obs, obs, action, rew, env_done, info)
         if obs is not None:
             rendered = env.render(mode='rgb_array')
-
-            # Should move this to manifest and read it in
-            pano_width = 3840
-            pano_height = 2160
-            label = env.labels.df.iloc[env.agent_pos]
-            coords = label['coords']
-
-            rel_coords = (int(coords[0]) / pano_width, int(coords[1]) / pano_width, int(coords[2]) / pano_height, int(coords[3]) / pano_height)
-            if rel_coords[0] - env.agent_dir > 0 and rel_coords[1] < env.agent_dir + (1/3):
-                text = label['obj_type'] + ": " + label.get('house_number', '')
-                display_text(screen, text, video_size)
+            labels, rel_coords = env.get_labels()
+            if labels.any():
+                text = labels['obj_type'] + ": " + labels.get('house_number', '')
+                display_bb(screen, rel_coords, text, video_size)
             display_arr(screen, rendered, transpose=transpose, video_size=video_size)
 
         # process pygame events
@@ -180,7 +181,7 @@ class PlayPlot(object):
             axis.set_title(name)
         self.t = 0
         self.cur_plot = [None for _ in range(num_plots)]
-        self.data     = [deque(maxlen=horizon_timesteps) for _ in range(num_plots)]
+        self.data = [deque(maxlen=horizon_timesteps) for _ in range(num_plots)]
 
     def callback(self, obs_t, obs_tp1, action, rew, done, info):
         points = self.data_callback(obs_t, obs_tp1, action, rew, done, info)
