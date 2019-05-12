@@ -118,6 +118,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
     clock = pygame.time.Clock()
     pygame.display.set_caption('NAVI')
 
+    info = None
     f=0
     start = time.time()
     while running:
@@ -135,13 +136,22 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
             obs, rew, env_done, info = env.step(action)
             if callback is not None:
                 callback(prev_obs, obs, action, rew, env_done, info)
+
         if obs is not None:
             rendered = env.render(mode='rgb_array')
-            labels, rel_coords = env.get_labels()
-            if labels.any():
-                text = labels['obj_type'] + ": " + labels.get('house_number', '')
-                display_bb(screen, rel_coords, text, video_size)
             display_arr(screen, rendered, transpose=transpose, video_size=video_size)
+        if info is not None:
+            achieved_goal = info.get('achieved_goal')
+            try:
+                text = achieved_goal.get('obj_type', [''])[0] + ": " + achieved_goal.get('house_number', [''])[0]
+                rel_coords = achieved_goal.get('rel_coords')
+            except AttributeError as e:
+                text = ''
+                rel_coords =  [1., 1., 1., 1.]
+            try:
+                display_bb(screen, rel_coords, text, video_size)
+            except Exception as e:
+                print("failing to write bounding box")
 
         # process pygame events
         for event in pygame.event.get():
