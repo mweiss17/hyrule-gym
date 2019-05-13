@@ -1,0 +1,36 @@
+<annotation>
+    <folder>equirectangular</folder>
+    <filename>HET_0034_3840x2160 214.png</filename>
+    <size>
+        <width>3840</width>
+        <height>2160</height>
+        <depth>3</depth>
+    </size>
+    <segmented>0</segmented>
+    <object>
+        <name>Number-6730</name>
+        <pose>Unspecified</pose>
+        <truncated>0</truncated>
+        <occluded>0</occluded>
+        <difficult>0</difficult>
+        <bndbox>
+            <xmin>2774</xmin>
+            <ymin>902</ymin>
+            <xmax>2832</xmax>
+            <ymax>1097</ymax>
+        </bndbox>
+    </object>
+    <object>
+        <name>Number-6732</name>
+        <pose>Unspecified</pose>
+        <truncated>0</truncated>
+        <occluded>0</occluded>
+        <difficult>0</difficult>
+        <bndbox>
+            <xmin>3230</xmin>
+            <ymin>942</ymin>
+            <xmax>3275</xmax>
+            <ymax>1122</ymax>
+        </bndbox>
+    </object>
+</annotation>

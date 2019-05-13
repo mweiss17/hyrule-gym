@@ -4,6 +4,7 @@
 .DS_Store
 .cache
 .pytest_cache/
+data/*/raw/*
 
 # Setuptools distribution and build folders.
 /dist/

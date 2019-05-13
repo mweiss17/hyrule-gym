@@ -1,0 +1,40 @@
+<annotation>
+    <folder>equirectangular</folder>
+    <filename>HET_0034_3840x2160 071.png</filename>
+    <size>
+        <width>3840</width>
+        <height>2160</height>
+        <depth>3</depth>
+    </size>
+    <segmented>0</segmented>
+    <object>
+        <name>Number-6795</name>
+        <pose>Unspecified</pose>
+        <truncated>0</truncated>
+        <occluded>0</occluded>
+        <difficult>0</difficult>
+        <rotated_box>
+            <cx>2916</cx>
+            <cy>991</cy>
+            <width>40</width>
+            <height>31</height>
+            <rot>0.330199</rot>
+        </rotated_box>
+        <polygon>
+            <x1>2902</x1>
+            <y1>1012</y1>
+            <x2>2939</x2>
+            <y2>999</y2>
+            <x3>2930</x3>
+            <y3>970</y3>
+            <x4>2893</x4>
+            <y4>983</y4>
+        </polygon>
+        <bndbox>
+            <xmin>2893</xmin>
+            <ymin>970</ymin>
+            <xmax>2939</xmax>
+            <ymax>1012</ymax>
+        </bndbox>
+    </object>
+</annotation>
