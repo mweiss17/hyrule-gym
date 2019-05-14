@@ -11,6 +11,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from read_model import *
+import argparse
+
+
+parser = argparse.ArgumentParser("Extracts camera positions from Colmap's reconstruction")
+parser.add_argument('folder_name', type=str,
+                    help='Project folder name')
+parser.add_argument('reconstruction', type=str,
+                    help='Chosen sparse reconstruction to extract positions from')
+parser.add_argument('plot', type=bool, default=False, nargs='?',
+                    help='Plot reconstruction positions when done')
+args = parser.parse_args()
+
+print("Path : data/" + args.folder_name + "/colmap/sparse/" + args.reconstruction)
+if not os.path.exists("data/" + args.folder_name + "/colmap/sparse/" + args.reconstruction):
+    parser.error("Reconstruction does not exist")
+
+reconstruction = args.reconstruction
+folder_name = args.folder_name
+os.chdir("data/" + folder_name)
+if not os.path.exists("processed"):
+    os.mkdir("processed")
 
 ROT_MAT = np.dot( [[-1, 0, 0], [0, -1, 0], [0, 0, -1]], [[0, 0, 1], [1, 0, 0], [0, 1, 0]])
 
@@ -52,7 +73,8 @@ def find_pos(imgs):
 
     return pos
 
-images = read_images_binary('images.bin')
+print('colmap/sparse/' + reconstruction + '/images.bin')
+images = read_images_binary('colmap/sparse/' + reconstruction + '/images.bin')
 
 col = ['frame', 'x', 'y', 'z']
 filt_data = pd.DataFrame(columns=col)
@@ -74,7 +96,7 @@ for k, v in grouped_imgs.items():
         try:
             pos = find_pos(v)
             if nb_pos == 0:
-                print(v[0].name)
+                print('Reference frame : ' + v[0].name)
                 ref_pos = pos 
                 ref_mat = v[0].qvec2rotmat()
         except:
@@ -86,8 +108,9 @@ for k, v in grouped_imgs.items():
         filt_data.loc[nb_pos] = pd.Series(d)
         nb_pos += 1 
 
-np.save('pos.npy', filt_data.values)
+np.save('processed/pos.npy', filt_data.values)
 
-plot_data(filt_data)
+if args.plot:
+	plot_data(filt_data)
 
 
