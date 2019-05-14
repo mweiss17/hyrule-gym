@@ -5,6 +5,9 @@
 .cache
 .pytest_cache/
 data/*/raw/*
+data/*/colmap/*
+data/*/processed/panoramas
+
 
 # Setuptools distribution and build folders.
 /dist/

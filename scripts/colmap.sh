@@ -1,12 +1,23 @@
- DATASET_PATH=.
+#!/bin/sh
+# $1 = Project folder name
+
+if [ ! -d "./data/$1/raw/crops" ]; then
+    echo "Directory /data/$1/raw/crops does not exist. Enter a valid Project folder name"
+    exit 1
+fi
+
+mkdir -p "./data/$1/colmap" 
+
+DATASET_PATH="./data/$1/colmap"
 
 colmap feature_extractor \
    --database_path $DATASET_PATH/database.db \
-   --image_path $DATASET_PATH/images \
+   --image_path $DATASET_PATH/../raw/crops \
    --ImageReader.camera_model RADIAL_FISHEYE
 
 colmap sequential_matcher \
-   --database_path $DATASET_PATH/database.db
+   --database_path $DATASET_PATH/database.db \
+   --SiftMatching.max_num_matches 15000
 
 mkdir $DATASET_PATH/sparse
 
