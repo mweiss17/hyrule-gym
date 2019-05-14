@@ -142,16 +142,10 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
             display_arr(screen, rendered, transpose=transpose, video_size=video_size)
         if info is not None:
             achieved_goal = info.get('achieved_goal')
-            try:
-                text = achieved_goal.get('obj_type', [''])[0] + ": " + achieved_goal.get('house_number', [''])[0]
-                rel_coords = achieved_goal.get('rel_coords')
-            except AttributeError as e:
-                text = ''
-                rel_coords =  [1., 1., 1., 1.]
-            try:
-                display_bb(screen, rel_coords, text, video_size)
-            except Exception as e:
-                print("failing to write bounding box")
+            print(achieved_goal)
+            # text = achieved_goal.get('obj_type', [''])[0] + ": " + achieved_goal.get('house_number', [''])[0]
+            # rel_coords = achieved_goal.get('rel_coords', [1., 1., 1., 1.])
+            #display_bb(screen, rel_coords, text, video_size)
 
         # process pygame events
         for event in pygame.event.get():

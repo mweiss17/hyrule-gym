@@ -16,14 +16,43 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import xml.etree.ElementTree as et
 
-def get_dataset(hdf_path="data/equirectangular/train.hdf5"):
-    df = pd.read_hdf(hdf_path, key='df', mode='r')
-    return df
 
-def create_dataset(dir_path="data/equirectangular/",
-                   data_path="data/equirectangular/data.hdf5",
-                   label_path="data/equirectangular/labels.hdf5",
-                   label_dir_path = "data/equirectangular/labels/*.xml", limit=None):
+def construct_spatial_graph(data_df, region="saint-urbain"):
+
+    # Init graph
+    G = nx.Graph()
+    G.add_nodes_from(data_df.index.values.tolist())
+
+    # Init vars
+    max_node_distance = 1.
+    pos = {}
+    edge_pos = []
+    for n1 in G.nodes:
+        # write pano metadata to nodes
+        meta = data_df.iloc[n1]
+        coords1 = np.array([meta['x'], meta['y'], meta['z']])
+        G.nodes[n1]['coords'] = coords1
+        G.nodes[n1]['frame'] = meta.name
+        # G.nodes[n1]['house_number'] = meta['house_number']
+        # Check the distance between the nodes
+        for n2 in G.nodes:
+            if n1 == n2: continue
+            meta2 = data_df.iloc[n2]
+            coords2 = np.array([meta2['x'], meta2['y'], meta2['z']])
+            G.nodes[n2]['coords'] = coords2
+            node_distance = np.linalg.norm(coords1 - coords2)
+            if node_distance > max_node_distance: continue
+            edge_pos.append((coords1, coords2))
+            G.add_edge(n1, n2, weight=node_distance)
+    graph_path="data/" + region + "/processed/graph.pkl"
+    nx.write_gpickle(G, graph_path)
+    return G
+
+def create_dataset(region="saint-urbain", limit=None):
+    dir_path="data/" + region + "/panos/"
+    data_path="data/" + region + "/processed/data.hdf5"
+    label_path="data/" + region + "/processed/labels.hdf5"
+    label_dir_path = "data/" + region + "/raw/labels/*.xml"
 
     #get png names and apply limit
     paths = glob.glob(dir_path+"*.png")
@@ -37,45 +66,44 @@ def create_dataset(dir_path="data/equirectangular/",
 
     i=0
     frames = []
-    thumbnails = []
+    thumbnails = {}
     x = []
     y = []
     z = []
 
+    path="data/saint-urbain/processed/pos.npy"
+    if limit:
+        coords = np.load(path)[:limit]
+    else:
+        coords = np.load(path)
+
+    frames = [int(x) - 1 for x in coords[:, 0]]
+    x = coords[:, 1]
+    y = coords[:, 2]
+    z = coords[:, 3]
+
     # Get panos and crop'em into thumbnails. Also makeup some fake coordinates
     for path in tqdm(paths, desc="Loading thumbnails"):
-        i += 1
-        try:
-            frame = path.split(" ")[-1].split(".")[0]
-            frames.append(int(frame) - 1)
-        except IndexError:
-            frames.append(-1)
-        x.append(i/8 + i % 8 + np.random.normal(loc=0.0, scale=1.0, size=None))
-        y.append(i/8 + i % 8 + np.random.normal(loc=0.0, scale=1.0, size=None))
-        z.append(i/8 + i % 8 + np.random.normal(loc=0.0, scale=1.0, size=None))
+        frame = int(path.split("_")[-1].split(".")[0])
         image = cv2.imread(path)
         image = cv2.resize(image, (width, height))[:,:,::-1]
         image = image[crop_margin:height - crop_margin]
-        thumbnails.append(image)
-    data_df = pd.DataFrame({"x": x,
-                            "y": y,
-                            "z": z,
-                            "path": paths,
-                            "frame": frames,
-                            "thumbnail": thumbnails}).set_index("frame").sort_values("frame")
-
+        thumbnails[frame] = image
+    data_df = pd.DataFrame({"x": x, "y": y, "z": z, "path": paths, "frame": frames, "thumbnail": list(thumbnails.values())})
     data_df.to_hdf(data_path, key="df", index=False)
+    construct_spatial_graph(data_df)
 
-    # Get Labels
+    # Process the Labels
     labels = {}
     for path in glob.glob(label_dir_path):
-        frame = path.split(" ")[1]
         xtree = et.parse(path)
         xroot = xtree.getroot()
-        object_types = []
-        bndboxes = []
-        vals = []
         for node in xroot:
+            object_types = []
+            bndboxes = []
+            vals = []
+            frame = path.split(" ")[1]
+
             if node.tag == "object":
                 name = node.find("name").text
                 try:
@@ -87,13 +115,13 @@ def create_dataset(dir_path="data/equirectangular/",
                 bndboxes.append((node.find("bndbox").find("xmin").text, node.find("bndbox").find("xmax").text, node.find("bndbox").find("ymin").text, node.find("bndbox").find("ymax").text))
                 vals.append(val)
                 object_types.append(object_type)
-        labels[int(frame) - 1] = (int(frame) - 1, object_types, vals, bndboxes)
-    label_df = pd.DataFrame(labels).T
+            labels[int(frame) - 1] = (int(frame) - 1, object_types, vals, bndboxes)
 
+    label_df = pd.DataFrame(labels).T
     label_df.columns = ["frame", "obj_type", "house_number", "label_coords"]
     label_df.to_hdf(label_path, key="df", index=False)
 
-
+create_dataset(region="saint-urbain")
 
 # # This is a torch dataset version (not really used yet)
 # class HyruleDataset(Dataset):

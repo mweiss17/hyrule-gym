@@ -46,57 +46,20 @@ class HyruleEnv(gym.GoalEnv):
         NOOP = 5
         DONE = 6
 
-    def __init__(self, data_path="data/equirectangular/data.hdf5",
-                       graph_path="data/equirectangular/graph.pkl",
-                       label_path="data/equirectangular/labels.hdf5",
-                       obs_type='image'):
-
-        if not os.path.exists(data_path) or not os.path.exists(label_path):
-            raise IOError("Couldn't find data or labels")
-
+    def __init__(self, region="saint-urbain", obs_type='image'):
         self.pano_width = 3840
         self.pano_height = 2160
         self.viewer = None
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=(84, 84, 3), dtype=np.uint8)
+
+        data_path="data/" + region + "/processed/data.hdf5"
+        label_path="data/" + region + "/processed/labels.hdf5"
+        graph_path="data/" + region + "/processed/graph.pkl"
         self.data_df = pd.read_hdf(data_path, key='df', mode='r')
         self.label_df = pd.read_hdf(label_path, key='df', mode='r')
-        self.G = self.construct_spatial_graph(graph_path)
-
-    def construct_spatial_graph(self, graph_path):
-        # Caching mechanism
-        if os.path.isfile(graph_path):
-            return nx.read_gpickle(graph_path)
-        else:
-
-            # Init graph
-            G = nx.Graph()
-            G.add_nodes_from(self.data_df.index.values.tolist())
-
-            # Init vars
-            max_node_distance = 20
-            pos = {}
-            edge_pos = []
-
-            for n1 in G.nodes:
-                meta = self.data_df.iloc[n1]
-                coords1 = np.array([meta['x'], meta['y'], meta['z']])
-                G.nodes[n1]['coords'] = coords1
-                G.nodes[n1]['frame'] = meta.name
-                G.nodes[n1]['house_number'] = meta['house_number']
-
-                for n2 in G.nodes:
-                    if n1 == n2: continue
-                    meta2 = self.data_df.iloc[n2]
-                    coords2 = np.array([meta2['x'], meta2['y'], meta2['z']])
-                    G.nodes[n2]['coords'] = coords2
-                    node_distance = np.linalg.norm(coords1 - coords2)
-                    if node_distance > max_node_distance: continue
-                    edge_pos.append((coords1, coords2))
-                    G.add_edge(n1, n2, weight=node_distance)
-            nx.write_gpickle(G, graph_path)
-        return G
+        self.G = nx.read_gpickle(graph_path)
 
     def turn(self, action):
         action = self._action_set(action)
@@ -117,14 +80,24 @@ class HyruleEnv(gym.GoalEnv):
         if action != self.Actions.FORWARD:
             self.turn(action)
         elif action == self.Actions.FORWARD:
+            # trainsition to another node in the graph
+
             self.edges = [edge[1] for edge in list(self.G.edges(self.agent_pos))]
-            dirs = {}
-            for e in self.edges:
-                a = self.G.nodes[e]['coords'][0] - self.G.nodes[self.agent_pos]['coords'][0]
-                h = np.linalg.norm(self.G.nodes[e]['coords'][0:2] - self.G.nodes[self.agent_pos]['coords'][0:2])
-                if np.abs(self.agent_dir - np.cos(a/h)) < 0.2:
-                    self.agent_pos = e
-                    break
+            print("my node: " +str(self.agent_pos))
+            print("self.edges: " +str(self.edges))
+            edge_angles = {}
+
+            # Traverse to the one which is most in line with the click
+            cur_coords = self.G.nodes[self.agent_pos]['coords']
+            for _, sink in self.G.edges(self.agent_pos):
+                sink_coords = self.G.nodes[sink]['coords']
+                #a = self.G.nodes[sink]['coords'][0] - self.G.nodes[self.agent_pos]['coords'][0]
+                o = sink_coords[1] - cur_coords[1]
+                h = np.linalg.norm(self.G.nodes[sink]['coords'][0:2] - self.G.nodes[self.agent_pos]['coords'][0:2])
+                angle = np.arcsin(o/h)/np.pi
+                edge_angles[sink] = np.abs(self.agent_dir - angle)
+            print(edge_angles)
+            self.agent_pos = min(edge_angles, key=edge_angles.get)
 
         ob = self._get_image()
 
@@ -156,11 +129,11 @@ class HyruleEnv(gym.GoalEnv):
     def reset(self):
         self.agent_pos = np.random.choice(len(self.G.nodes))
         self.agent_dir = random.uniform(0, 1)
-        self.desired_goal = self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])][["obj_type", "house_number", "label_coords"]]
+        self.desired_goal = np.random.choice(self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])]["house_number"])
         try:
-            self.achieved_goal = self.label_df.iloc[self.agent_pos][["obj_type", "house_number", "label_coords"]]
+            self.achieved_goal = self.label_df.iloc[self.agent_pos]["house_number"]
         except Exception as e:
-            self.achieved_goal = {"obj_type": [''], "house_number": [''], "label_coords": ['']}
+            self.achieved_goal = ['-1']
         return {"observation": self._get_image(), "achieved_goal": self.achieved_goal, "desired_goal": self.desired_goal}
 
     def get_labels(self):
@@ -191,7 +164,7 @@ class HyruleEnv(gym.GoalEnv):
                 ob, reward, done, info = env.step()
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
-        if achieved_goal['house_number'] == desired_goal['house_number']:
+        if desired_goal in achieved_goal:
             return 1.0
         return 0.0
 
