@@ -22,9 +22,23 @@ def construct_spatial_graph(data_df, region="saint-urbain"):
     # Init graph
     G = nx.Graph()
     G.add_nodes_from(data_df.index.values.tolist())
+    to_remove = set()
+    for n1 in G.nodes:
+        meta = data_df.iloc[n1]
+        coords1 = np.array([meta['x'], meta['y'], meta['z']])
+        for n2 in G.nodes:
+            if n1 == n2: continue
+            meta2 = data_df.iloc[n2]
+            coords2 = np.array([meta2['x'], meta2['y'], meta2['z']])
+            node_distance = np.linalg.norm(coords1 - coords2)
+            if node_distance < 0.18:
+                to_remove.add(n1)
+    for n1 in to_remove:
+        G.remove_node(n1)
 
     # Init vars
     max_node_distance = 1.
+    min_node_distance = 0.25
     pos = {}
     edge_pos = []
     for n1 in G.nodes:
@@ -41,7 +55,10 @@ def construct_spatial_graph(data_df, region="saint-urbain"):
             coords2 = np.array([meta2['x'], meta2['y'], meta2['z']])
             G.nodes[n2]['coords'] = coords2
             node_distance = np.linalg.norm(coords1 - coords2)
-            if node_distance > max_node_distance: continue
+            if node_distance > max_node_distance or node_distance < min_node_distance:
+                continue
+            # if len(G.edges(n2)) > 3 or len(G.edges(n1)) > 3:
+            #     continue
             edge_pos.append((coords1, coords2))
             G.add_edge(n1, n2, weight=node_distance)
     graph_path="data/" + region + "/processed/graph.pkl"
@@ -89,7 +106,7 @@ def create_dataset(region="saint-urbain", limit=None):
         image = cv2.resize(image, (width, height))[:,:,::-1]
         image = image[crop_margin:height - crop_margin]
         thumbnails[frame] = image
-    data_df = pd.DataFrame({"x": x, "y": y, "z": z, "path": paths, "frame": frames, "thumbnail": list(thumbnails.values())})
+    data_df = pd.DataFrame({"x": x, "y": y, "z": z, "frame": frames, "thumbnail": list(thumbnails.values())})
     data_df.to_hdf(data_path, key="df", index=False)
     construct_spatial_graph(data_df)
 
