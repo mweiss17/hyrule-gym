@@ -16,7 +16,7 @@ if not os.path.exists("data/" + args.folder_name + "/raw/crops"):
 folder_name = args.folder_name
 
 if not os.path.exists("data/" + folder_name + "/processed/panoramas"):
-    os.mkdir("data/" + folder_name + "/processed/panoramas")
+    os.makedirs("data/" + folder_name + "/processed/panoramas")
 
 input_dir = "data/" + folder_name + "/raw/crops"
 output_dir = "data/" + folder_name + "/processed/panoramas"

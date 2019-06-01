@@ -16,20 +16,20 @@ colmap feature_extractor \
    --ImageReader.camera_model RADIAL_FISHEYE
 
 colmap sequential_matcher \
-   --database_path $DATASET_PATH/database.db \
-   --SiftMatching.max_num_matches 15000
+   --database_path $DATASET_PATH/database.db 
+#   --SiftMatching.max_num_matches 15000
 
-mkdir $DATASET_PATH/sparse
+mkdir -p $DATASET_PATH/sparse
 
 colmap mapper \
     --database_path $DATASET_PATH/database.db \
-    --image_path $DATASET_PATH/images \
+    --image_path $DATASET_PATH/../raw/crops \
     --output_path $DATASET_PATH/sparse
 
-mkdir $DATASET_PATH/dense
+mkdir -p $DATASET_PATH/dense
 
 colmap image_undistorter \
-    --image_path $DATASET_PATH/images \
+    --image_path $DATASET_PATH/../raw/crops \
     --input_path $DATASET_PATH/sparse/0 \
     --output_path $DATASET_PATH/dense \
     --output_type COLMAP \

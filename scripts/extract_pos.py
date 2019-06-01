@@ -8,6 +8,7 @@ import collections
 import struct
 import pandas as pd
 import numpy as np
+import quaternion
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from read_model import *
@@ -33,7 +34,7 @@ os.chdir("data/" + folder_name)
 if not os.path.exists("processed"):
     os.mkdir("processed")
 
-ROT_MAT = np.dot( [[-1, 0, 0], [0, -1, 0], [0, 0, -1]], [[0, 0, 1], [1, 0, 0], [0, 1, 0]])
+ROT_MAT = [[0, 0, -1], [-1, 0, 0], [0, -1, 0]]
 
 def plot_data(data):
     # Plot the poses
@@ -54,7 +55,7 @@ def plot_data(data):
     # ax.axis('equal')
     ax.set_xlim3d(-6,6)
     ax.set_ylim3d(-2,10)
-    ax.set_zlim3d(0,12)
+    ax.set_zlim3d(-6,6)
     plt.show()
 
 def find_pos(imgs):
@@ -73,10 +74,30 @@ def find_pos(imgs):
 
     return pos
 
+def find_angle(ref_q, ref_cam, imgs):
+    angles = []
+    for img in imgs:
+        cam = float(img.name.split('_')[1])
+        ref_cam = float(ref_cam)
+        rqvec = np.quaternion(ref_q[0], ref_q[1], ref_q[2], ref_q[3])
+        qvec = np.quaternion(img.qvec[0], img.qvec[1], img.qvec[2], img.qvec[3])
+        q = rqvec.inverse()*qvec
+        ang = np.dot(np.array([0,1,0]), quaternion.as_rotation_vector(q))*180/np.pi
+        ang = ang + (np.ceil(cam/2) - np.ceil(ref_cam/2))*90
+        angles.append(ang)
+
+    angle = sum(angles)/len(angles)
+    while angle > 360:
+        angle = angle - 360
+    while angle < 0:
+        angle = angle + 360
+
+    return angle
+
 print('colmap/sparse/' + reconstruction + '/images.bin')
 images = read_images_binary('colmap/sparse/' + reconstruction + '/images.bin')
 
-col = ['frame', 'x', 'y', 'z']
+col = ['frame', 'x', 'y', 'z', 'angle']
 filt_data = pd.DataFrame(columns=col)
 grouped_imgs = {}
 
@@ -98,17 +119,23 @@ for k, v in grouped_imgs.items():
             if nb_pos == 0:
                 print('Reference frame : ' + v[0].name)
                 ref_pos = pos 
+                ref_q = v[0].qvec
+                ref_cam = v[0].name.split('_')[1]
                 ref_mat = v[0].qvec2rotmat()
         except:
             continue
 
         this_pos = np.dot(ref_mat, (pos - ref_pos))
         this_pos = np.dot(ROT_MAT, this_pos)
-        d = {'frame': k, 'x':this_pos[0], 'y':this_pos[1], 'z':this_pos[2]}
+        this_pos[-1] = 0
+        angle = find_angle(ref_q, ref_cam, v)
+        if args.plot:
+        	print(str(k) + ' : ' + str(angle))
+        d = {'frame': k, 'x':this_pos[0], 'y':this_pos[1], 'z':this_pos[2], 'angle':angle}
         filt_data.loc[nb_pos] = pd.Series(d)
         nb_pos += 1 
 
-np.save('processed/pos.npy', filt_data.values)
+np.save('processed/poses.npy', filt_data.values)
 
 if args.plot:
 	plot_data(filt_data)
