@@ -45,20 +45,14 @@ class HyruleEnv(gym.GoalEnv):
         RIGHT_BIG = 4
         DONE = 5
 
-    def __init__(self, region="saint-urbain", obs_type='image'):
-        self.pano_width = 3840
-        self.pano_height = 2160
+    def __init__(self, region="saint-urbain", obs_type='image', obs_shape=(84, 84, 3)):
         self.viewer = None
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
-        self.observation_space = spaces.Box(low=0, high=255, shape=(84, 84, 3), dtype=np.uint8)
-
-        data_path="data/" + region + "/processed/data.hdf5"
-        label_path="data/" + region + "/processed/labels.hdf5"
-        graph_path="data/" + region + "/processed/graph.pkl"
-        self.data_df = pd.read_hdf(data_path, key='df', mode='r')
-        self.label_df = pd.read_hdf(label_path, key='df', mode='r')
-        self.G = nx.read_gpickle(graph_path)
+        self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
+        self.data_df = pd.read_hdf("data/" + region + "/processed/data.hdf5", key='df', mode='r')
+        self.label_df = pd.read_hdf("data/" + region + "/processed/labels.hdf5", key='df', mode='r')
+        self.G = nx.read_gpickle("data/" + region + "/processed/graph.pkl")
 
     def turn(self, action):
         action = self._action_set(action)
@@ -75,16 +69,13 @@ class HyruleEnv(gym.GoalEnv):
     def step(self, a):
         reward = 0.0
         action = self._action_set(a)
-        self.neighbors = [edge[1] for edge in list(self.G.edges(self.agent_pos))]
-        cur_coords = self.G.nodes[self.agent_pos]['coords']
         pano_angle = self.G.nodes[self.agent_pos]['angle'] / 360
 
         edge_angles = {}
 
         # Calculate angles to each neighbor
-        for n in self.neighbors:
-            sink_coords = self.G.nodes[n]['coords']
-            o = sink_coords[1] - cur_coords[1]
+        for n in [edge[1] for edge in list(self.G.edges(self.agent_pos))]:
+            o = self.G.nodes[n]['coords'][1] - self.G.nodes[self.agent_pos]['coords'][1]
             h = np.linalg.norm(self.G.nodes[n]['coords'][0:2] - self.G.nodes[self.agent_pos]['coords'][0:2])
             edge_angle = np.arcsin(o/h)/np.pi + 0.5
             # print("edge_angle: "+str(edge_angle))
@@ -134,8 +125,10 @@ class HyruleEnv(gym.GoalEnv):
 
     def get_labels(self):
         coords = label['label_coords']
+        pano_width = 3840
+        pano_height = 2160
 
-        rel_coords = (int(coords[0]) / self.pano_width, int(coords[1]) / self.pano_width, int(coords[2]) / self.pano_height, int(coords[3]) / self.pano_height)
+        rel_coords = (int(coords[0]) / pano_width, int(coords[1]) / self.pano_width, int(coords[2]) / pano_height, int(coords[3]) / pano_height)
 
         if not(rel_coords[0] - self.agent_dir > 0 and rel_coords[1] < self.agent_dir + (1/3)):
             label=pd.Series()
