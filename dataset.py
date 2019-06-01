@@ -22,7 +22,8 @@ def construct_spatial_graph(data_df, region="saint-urbain"):
     # Init graph
     G = nx.Graph()
     G.add_nodes_from(data_df.index.values.tolist())
-    to_remove = set()
+    to_remove = set(data_df.index.values.tolist())
+
     for n1 in G.nodes:
         meta = data_df.iloc[n1]
         coords1 = np.array([meta['x'], meta['y'], meta['z']])
@@ -31,36 +32,37 @@ def construct_spatial_graph(data_df, region="saint-urbain"):
             meta2 = data_df.iloc[n2]
             coords2 = np.array([meta2['x'], meta2['y'], meta2['z']])
             node_distance = np.linalg.norm(coords1 - coords2)
-            if node_distance < 0.18:
-                to_remove.add(n1)
-    for n1 in to_remove:
-        G.remove_node(n1)
 
     # Init vars
     max_node_distance = 1.
-    min_node_distance = 0.25
-    pos = {}
-    edge_pos = []
     for n1 in G.nodes:
         # write pano metadata to nodes
         meta = data_df.iloc[n1]
         coords1 = np.array([meta['x'], meta['y'], meta['z']])
         G.nodes[n1]['coords'] = coords1
         G.nodes[n1]['frame'] = meta.name
-        # G.nodes[n1]['house_number'] = meta['house_number']
+        G.nodes[n1]['angle'] = meta.angle
+
         # Check the distance between the nodes
         for n2 in G.nodes:
             if n1 == n2: continue
+            if n1 in to_remove: to_remove.remove(n1)
+            if n2 in to_remove: to_remove.remove(n2)
+
             meta2 = data_df.iloc[n2]
             coords2 = np.array([meta2['x'], meta2['y'], meta2['z']])
             G.nodes[n2]['coords'] = coords2
             node_distance = np.linalg.norm(coords1 - coords2)
-            if node_distance > max_node_distance or node_distance < min_node_distance:
+            if node_distance > max_node_distance:
                 continue
-            # if len(G.edges(n2)) > 3 or len(G.edges(n1)) > 3:
-            #     continue
-            edge_pos.append((coords1, coords2))
             G.add_edge(n1, n2, weight=node_distance)
+
+    for n1 in to_remove:
+        try:
+            self.G.edges(n1)
+        except Exception:
+            G.remove_node(n1)
+
     graph_path="data/" + region + "/processed/graph.pkl"
     nx.write_gpickle(G, graph_path)
     return G
@@ -88,7 +90,7 @@ def create_dataset(region="saint-urbain", limit=None):
     y = []
     z = []
 
-    path="data/saint-urbain/processed/pos.npy"
+    path="data/saint-urbain/processed/pos_ang.npy"
     if limit:
         coords = np.load(path)[:limit]
     else:
@@ -98,6 +100,7 @@ def create_dataset(region="saint-urbain", limit=None):
     x = coords[:, 1]
     y = coords[:, 2]
     z = coords[:, 3]
+    angle = coords[:, 4]
 
     # Get panos and crop'em into thumbnails. Also makeup some fake coordinates
     for path in tqdm(paths, desc="Loading thumbnails"):
@@ -106,7 +109,7 @@ def create_dataset(region="saint-urbain", limit=None):
         image = cv2.resize(image, (width, height))[:,:,::-1]
         image = image[crop_margin:height - crop_margin]
         thumbnails[frame] = image
-    data_df = pd.DataFrame({"x": x, "y": y, "z": z, "frame": frames, "thumbnail": list(thumbnails.values())})
+    data_df = pd.DataFrame({"x": x, "y": y, "z": z, "angle": angle, "frame": frames, "thumbnail": list(thumbnails.values())})
     data_df.to_hdf(data_path, key="df", index=False)
     construct_spatial_graph(data_df)
 
@@ -138,7 +141,6 @@ def create_dataset(region="saint-urbain", limit=None):
     label_df.columns = ["frame", "obj_type", "house_number", "label_coords"]
     label_df.to_hdf(label_path, key="df", index=False)
 
-create_dataset(region="saint-urbain")
 
 # # This is a torch dataset version (not really used yet)
 # class HyruleDataset(Dataset):

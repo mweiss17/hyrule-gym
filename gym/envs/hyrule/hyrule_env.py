@@ -43,8 +43,7 @@ class HyruleEnv(gym.GoalEnv):
         FORWARD = 2
         RIGHT_SMALL = 3
         RIGHT_BIG = 4
-        NOOP = 5
-        DONE = 6
+        DONE = 5
 
     def __init__(self, region="saint-urbain", obs_type='image'):
         self.pano_width = 3840
@@ -76,29 +75,27 @@ class HyruleEnv(gym.GoalEnv):
     def step(self, a):
         reward = 0.0
         action = self._action_set(a)
+        self.neighbors = [edge[1] for edge in list(self.G.edges(self.agent_pos))]
+        cur_coords = self.G.nodes[self.agent_pos]['coords']
+        pano_angle = self.G.nodes[self.agent_pos]['angle'] / 360
 
+        edge_angles = {}
+
+        # Calculate angles to each neighbor
+        for n in self.neighbors:
+            sink_coords = self.G.nodes[n]['coords']
+            o = sink_coords[1] - cur_coords[1]
+            h = np.linalg.norm(self.G.nodes[n]['coords'][0:2] - self.G.nodes[self.agent_pos]['coords'][0:2])
+            edge_angle = np.arcsin(o/h)/np.pi + 0.5
+            # print("edge_angle: "+str(edge_angle))
+            # print("self.agent_dir: "+str(self.agent_dir))
+            # print("pano_angle + edge_angle - self.agent_dir: " + str(pano_angle + edge_angle - self.agent_dir))
+            edge_angles[n] = np.abs(pano_angle + edge_angle - self.agent_dir)
         if action != self.Actions.FORWARD:
             self.turn(action)
         elif action == self.Actions.FORWARD:
-            # trainsition to another node in the graph
-
-            self.edges = [edge[1] for edge in list(self.G.edges(self.agent_pos))]
-            print("my node: " +str(self.agent_pos))
-            print("self.edges: " +str(self.edges))
-            edge_angles = {}
-
-            # Traverse to the one which is most in line with the click
-            cur_coords = self.G.nodes[self.agent_pos]['coords']
-            for _, sink in self.G.edges(self.agent_pos):
-                sink_coords = self.G.nodes[sink]['coords']
-                #a = self.G.nodes[sink]['coords'][0] - self.G.nodes[self.agent_pos]['coords'][0]
-                o = sink_coords[1] - cur_coords[1]
-                h = np.linalg.norm(self.G.nodes[sink]['coords'][0:2] - self.G.nodes[self.agent_pos]['coords'][0:2])
-                angle = np.arcsin(o/h)/np.pi
-                edge_angles[sink] = np.abs(self.agent_dir - angle)
-            print(edge_angles)
-            self.agent_pos = min(edge_angles, key=edge_angles.get)
-
+            if edge_angles[min(edge_angles, key=edge_angles.get)] < 60/360:
+                self.agent_pos = min(edge_angles, key=edge_angles.get)
         ob = self._get_image()
 
         reward = self.compute_reward(self.achieved_goal, self.desired_goal, {})
@@ -109,27 +106,26 @@ class HyruleEnv(gym.GoalEnv):
 
     def _get_image(self):
         image = self.data_df.iloc[self.agent_pos]['thumbnail']
-        x = int(image.shape[1] * self.agent_dir)
-        w = int(image.shape[1] * (1/3))
-        h = image.shape[0]
+        angle = self.data_df.iloc[self.agent_pos]['angle']
+        x = (int(image.shape[1] * self.agent_dir) + int(image.shape[1] * angle/360)) % image.shape[1]
+        w = 84
 
         if (x + w) % image.shape[1] != (x + w):
-            img = np.zeros((h, w, 3))
+            img = np.zeros((84, 84, 3))
 
             offset = (x + w) % image.shape[1]
-            offset1 = image.shape[1] - x
-
+            offset1 = image.shape[1] - (x % image.shape[1])
             img[:, :offset1, :] = image[:, x:x + offset1]
             img[:, offset1:, :] = image[:, :offset]
+            img = img.astype(int)
         else:
             img = image[:, x:x + w]
-        img = cv2.resize(img, (84, 84))
         return img
 
     def reset(self):
-        self.agent_pos = np.random.choice(len(self.G.nodes))
-        self.agent_dir = random.uniform(0, 1)
-        self.desired_goal = np.random.choice(self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])]["house_number"])
+        self.agent_pos = 0#np.random.choice(self.G.nodes)
+        self.agent_dir = 0#random.uniform(0, 1)
+        self.desired_goal = 1# np.random.choice(self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])]["house_number"])
         try:
             self.achieved_goal = self.label_df.iloc[self.agent_pos]["house_number"]
         except Exception as e:
@@ -194,7 +190,6 @@ class HyruleEnv(gym.GoalEnv):
             'FORWARD': ord('d'),
             'RIGHT_SMALL': ord('f'),
             'RIGHT_BIG': ord(' '),
-            'NOOP': ord('n'),
             'DONE': ord('p'),
         }
 
