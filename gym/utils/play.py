@@ -1,18 +1,18 @@
-import gym
-import pygame
-import matplotlib
+from collections import deque
 import argparse
 import time
+import matplotlib
+import gym
 from gym import logger
+import pygame
 try:
     matplotlib.use('TkAgg')
     import matplotlib.pyplot as plt
 except ImportError as e:
     logger.warn('failed to set matplotlib backend, plotting will not work: %s' % str(e))
     plt = None
-
-from collections import deque
 from pygame.locals import VIDEORESIZE
+
 
 def display_arr(screen, arr, video_size, transpose):
     arr_min, arr_max = arr.min(), arr.max()
@@ -42,7 +42,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
 
     To simply play the game use:
 
-        play(gym.make("Pong-v4"))
+        play(gym.make("Hyrule-v0"))
 
     Above code works also if env is wrapped, so it's particularly useful in
     verifying that the frame-level preprocessing does not render the game
@@ -94,7 +94,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
         If None, default key_to_action mapping for that env is used, if provided.
     """
     env.reset()
-    rendered=env.render(mode='rgb_array')
+    rendered = env.render(mode='rgb_array')
 
     if keys_to_action is None:
         if hasattr(env, 'get_keys_to_action'):
@@ -104,8 +104,8 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
         else:
             assert False, env.spec.id + " does not have explicit key to action mapping, " + \
                           "please specify one manually"
-    relevant_keys = set(sum(map(list, keys_to_action.keys()),[]))
-    video_size=[rendered.shape[1], rendered.shape[0]]
+    relevant_keys = set(sum(map(list, keys_to_action.keys()), []))
+    video_size = [rendered.shape[1], rendered.shape[0]]
     if zoom is not None:
         video_size = int(video_size[0] * zoom), int(video_size[1] * zoom)
 
@@ -119,13 +119,14 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
     pygame.display.set_caption('NAVI')
 
     info = None
-    f=0
+    f = 0
     start = time.time()
     while running:
         f += 1
         if time.time() - start > 1:
+            print(f)
             start = time.time()
-            f=0
+            f = 0
         if env_done:
             env_done = False
             obs = env.reset()
@@ -133,6 +134,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
             action = keys_to_action.get(tuple(sorted(pressed_keys)), 2)
             prev_obs = obs
             obs, rew, env_done, info = env.step(action)
+
             if callback is not None:
                 callback(prev_obs, obs, action, rew, env_done, info)
 
@@ -165,6 +167,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
 
         pygame.display.flip()
         clock.tick(fps)
+
     pygame.quit()
 
 class PlayPlot(object):

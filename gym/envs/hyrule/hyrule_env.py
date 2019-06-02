@@ -1,28 +1,12 @@
+""" This is the simulator for NAVI project. It defines the action and observation spaces, tracks the agent's state, and specifies game logic. """
 from __future__ import print_function, division
-import numpy as np
-import os
-import gym
-from gym import error, spaces
-from gym import utils
 import enum
-import os
-import torch
-import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
-import csv
-import cv2
-import glob
+import pandas as pd
 import networkx as nx
-from tqdm import tqdm
-from enum import Enum
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import random
-import xml.etree.ElementTree as et
-import time
+import gym
+from gym import spaces
+
 
 ACTION_MEANING = {
     0: 'LEFT_BIG',
@@ -66,27 +50,28 @@ class HyruleEnv(gym.GoalEnv):
             self.agent_dir += (1/3)
         self.agent_dir = self.agent_dir % 1
 
-    def step(self, a):
-        reward = 0.0
-        action = self._action_set(a)
-        pano_angle = self.G.nodes[self.agent_pos]['angle'] / 360
 
-        edge_angles = {}
+    def transition(self):
+        neighbors = {}
 
         # Calculate angles to each neighbor
         for n in [edge[1] for edge in list(self.G.edges(self.agent_pos))]:
             o = self.G.nodes[n]['coords'][1] - self.G.nodes[self.agent_pos]['coords'][1]
             h = np.linalg.norm(self.G.nodes[n]['coords'][0:2] - self.G.nodes[self.agent_pos]['coords'][0:2])
-            edge_angle = np.arcsin(o/h)/np.pi + 0.5
-            # print("edge_angle: "+str(edge_angle))
-            # print("self.agent_dir: "+str(self.agent_dir))
-            # print("pano_angle + edge_angle - self.agent_dir: " + str(pano_angle + edge_angle - self.agent_dir))
-            edge_angles[n] = np.abs(pano_angle + edge_angle - self.agent_dir)
+            angle = np.arcsin(o/h)/np.pi + 0.5
+            neighbors[n] = np.abs(angle - self.agent_dir)
+
+        if neighbors[min(neighbors, key=neighbors.get)] > 60/360:
+            return
+        else:
+            self.agent_pos = min(neighbors, key=neighbors.get)
+
+    def step(self, a):
+        action = self._action_set(a)
         if action != self.Actions.FORWARD:
             self.turn(action)
         elif action == self.Actions.FORWARD:
-            if edge_angles[min(edge_angles, key=edge_angles.get)] < 60/360:
-                self.agent_pos = min(edge_angles, key=edge_angles.get)
+            self.transition()
         ob = self._get_image()
 
         reward = self.compute_reward(self.achieved_goal, self.desired_goal, {})
@@ -114,7 +99,7 @@ class HyruleEnv(gym.GoalEnv):
         return img
 
     def reset(self):
-        self.agent_pos = 0#np.random.choice(self.G.nodes)
+        self.agent_pos = 15#np.random.choice(self.G.nodes)
         self.agent_dir = 0#random.uniform(0, 1)
         self.desired_goal = 1# np.random.choice(self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])]["house_number"])
         try:

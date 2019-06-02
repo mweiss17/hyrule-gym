@@ -1,4 +1,4 @@
-""" pre-process and write to disk the labels, spatial graph, and lower resolution images """
+""" pre-process and write the labels, spatial graph, and lower resolution images to disk """
 from __future__ import print_function, division
 import glob
 import xml.etree.ElementTree as et
