@@ -4,6 +4,8 @@ import enum
 import numpy as np
 import pandas as pd
 import networkx as nx
+import cv2
+from matplotlib import pyplot as plt
 import gym
 from gym import spaces
 
@@ -38,35 +40,55 @@ class HyruleEnv(gym.GoalEnv):
         self.label_df = pd.read_hdf("data/" + region + "/processed/labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle("data/" + region + "/processed/graph.pkl")
 
+    def norm_angle(self, x):
+        if x > 180:
+            x = -360 + x
+        elif x < -180:
+            x = 360 + x
+        return x
+
+    def norm_angle_for_pixels(self, x, image_width):
+        if x < 0:
+            x = image_width + x
+        return x
+
     def turn(self, action):
         action = self._action_set(action)
         if action == self.Actions.LEFT_BIG:
-            self.agent_dir -= (1/3)
+            self.agent_dir -= 120
         if action == self.Actions.LEFT_SMALL:
-            self.agent_dir -= (1/9)
+            self.agent_dir -= 40
         if action == self.Actions.RIGHT_SMALL:
-            self.agent_dir += (1/9)
+            self.agent_dir += 40
         if action == self.Actions.RIGHT_BIG:
-            self.agent_dir += (1/3)
-        self.agent_dir = self.agent_dir % 1
+            self.agent_dir += 120
+        self.agent_dir = self.norm_angle(self.agent_dir)
 
-
-    def transition(self):
+    def neighbor_angles(self):
         neighbors = {}
 
         # Calculate angles to each neighbor
         for n in [edge[1] for edge in list(self.G.edges(self.agent_pos))]:
             o = self.G.nodes[n]['coords'][1] - self.G.nodes[self.agent_pos]['coords'][1]
             h = np.linalg.norm(self.G.nodes[n]['coords'][0:2] - self.G.nodes[self.agent_pos]['coords'][0:2])
-            angle = np.arcsin(o/h)/np.pi + 0.5
-            neighbors[n] = np.abs(angle - self.agent_dir)
+            angle = self.norm_angle(np.arcsin(o/h)/np.pi * 360 - 90)
 
-        if neighbors[min(neighbors, key=neighbors.get)] > 60/360:
-            return
-        else:
-            self.agent_pos = min(neighbors, key=neighbors.get)
+            if n == 16:
+                print("angle: " + str(angle))
+                print("self.agent_dir: " + str(self.agent_dir))
+            neighbors[n] = np.abs(self.norm_angle(angle - self.agent_dir - 67.5))
+        print(neighbors)
+        return neighbors
+
+    def transition(self):
+        neighbors = self.neighbor_angles()
+        if neighbors[min(neighbors, key=neighbors.get)] > 60:
+            return # noop
+        self.agent_pos = min(neighbors, key=neighbors.get)
+
 
     def step(self, a):
+
         action = self._action_set(a)
         if action != self.Actions.FORWARD:
             self.turn(action)
@@ -80,30 +102,49 @@ class HyruleEnv(gym.GoalEnv):
             done = True
         return ob, reward, done, {'achieved_goal': self.achieved_goal}
 
-    def _get_image(self):
-        image = self.data_df.iloc[self.agent_pos]['thumbnail']
-        angle = self.data_df.iloc[self.agent_pos]['angle']
-        x = (int(image.shape[1] * self.agent_dir) + int(image.shape[1] * angle/360)) % image.shape[1]
-        w = 84
 
-        if (x + w) % image.shape[1] != (x + w):
-            img = np.zeros((84, 84, 3))
-
-            offset = (x + w) % image.shape[1]
-            offset1 = image.shape[1] - (x % image.shape[1])
-            img[:, :offset1, :] = image[:, x:x + offset1]
-            img[:, offset1:, :] = image[:, :offset]
-            img = img.astype(int)
+    def _get_image(self, high_res=False, plot=False):
+        if high_res:
+            img = cv2.imread(filename="data/saint-urbain/panos/pano_frame_"+ str(self.agent_pos).zfill(6) + ".png")[:, :, ::-1]
+            # Have to change the observation space :/
+            obs_shape = (1024, 1024, 3)
         else:
-            img = image[:, x:x + w]
-        return img
+            img = self.data_df.loc[self.agent_pos]['thumbnail']
+            obs_shape = self.observation_space.shape
+
+        pano_rel_rotation = self.norm_angle(self.G.node[self.agent_pos]['angle'])
+
+        #temp
+        neighbors = self.neighbor_angles()
+        # print("node: " + str(min(neighbors, key=neighbors.get)))
+        # print("angle diff: " + str(neighbors[min(neighbors, key=neighbors.get)]))
+        w = obs_shape[0]
+        y = img.shape[0] - obs_shape[0]
+        h = obs_shape[0]
+        x = int((self.norm_angle(self.agent_dir - pano_rel_rotation)/180 * w))
+        x = self.norm_angle_for_pixels(x, w)
+
+        if (x + w) % img.shape[1] != (x + w):
+            res_img = np.zeros(obs_shape)
+            offset1 = (x + w) % img.shape[1]
+            offset2 = img.shape[1] - (x % img.shape[1])
+            res_img[:, :offset2] = img[y:y+h, x:x + offset2]
+            res_img[:, offset2:] = img[y:y+h, :offset1]
+        else:
+            res_img = img[:, x:x + w]
+
+        if plot:
+            fig, ax = plt.subplots(figsize=(18, 18))
+            ax.imshow(res_img.astype(int))
+            plt.show()
+        return res_img
 
     def reset(self):
         self.agent_pos = 15#np.random.choice(self.G.nodes)
-        self.agent_dir = 0#random.uniform(0, 1)
+        self.agent_dir = self.norm_angle(self.G.node[self.agent_pos]['angle'])#random.uniform(0, 1)
         self.desired_goal = 1# np.random.choice(self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])]["house_number"])
         try:
-            self.achieved_goal = self.label_df.iloc[self.agent_pos]["house_number"]
+            self.achieved_goal = self.label_df.loc[self.agent_pos]["house_number"]
         except Exception as e:
             self.achieved_goal = ['-1']
         return {"observation": self._get_image(), "achieved_goal": self.achieved_goal, "desired_goal": self.desired_goal}

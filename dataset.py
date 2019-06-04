@@ -6,6 +6,7 @@ from tqdm import tqdm
 import networkx as nx
 import pandas as pd
 import numpy as np
+import collections
 import cv2
 
 def process_labels(region):
@@ -47,7 +48,7 @@ def construct_spatial_graph(data_df, region="saint-urbain"):
 
     for node_1 in nodes:
         # write pano metadata to nodes
-        meta = data_df.iloc[node_1]
+        meta = data_df.loc[node_1]
         coords1 = np.array([meta['x'], meta['y'], meta['z']])
         G.nodes[node_1]['coords'] = coords1
         G.nodes[node_1]['frame'] = meta.name
@@ -57,8 +58,7 @@ def construct_spatial_graph(data_df, region="saint-urbain"):
         for node_2 in G.nodes:
             if node_1 == node_2:
                 continue
-
-            meta2 = data_df.iloc[node_2]
+            meta2 = data_df.loc[node_2]
             coords2 = np.array([meta2['x'], meta2['y'], meta2['z']])
             G.nodes[node_2]['coords'] = coords2
             node_distance = np.linalg.norm(coords1 - coords2)
@@ -92,20 +92,39 @@ def create_dataset(region="saint-urbain", limit=None):
     else:
         coords = np.load("data/" + region + "/processed/pos_ang.npy")
 
-    frames = [int(x) - 1 for x in coords[:, 0]]
+    # Get panos and crop'em into thumbnails
+    for path in tqdm(paths, desc="Loading thumbnails"):
+        frame = int(path.split("_")[-1].split(".")[0]) - 1
+        image = cv2.imread(path)
+        image = cv2.resize(image, (width, height))[:, :, ::-1]
+        image = image[crop_margin:height - crop_margin]
+        thumbnails[frame] = image
+    od = collections.OrderedDict(sorted(thumbnails.items()))
+    coords = coords[coords[:, 0].argsort()]
+    coords[:, 0] = np.array([int(x) - 1 for x in coords[:, 0]])
+    intersection = set(coords[:, 0]).intersection(set(od.keys()))
+
+    to_keep = list()
+    for idx, frame in enumerate(coords[:, 0]):
+        if frame in intersection:
+            to_keep.append(idx)
+    coords = np.take(coords, to_keep, axis=0)
+
+    to_delete = list()
+    for key in thumbnails.keys():
+        if key not in intersection:
+            to_delete.append(key)
+
+    for key in to_delete:
+        del od[key]
+
     x = coords[:, 1]
     y = coords[:, 2]
     z = coords[:, 3]
     angle = coords[:, 4]
 
-    # Get panos and crop'em into thumbnails. Also makeup some fake coordinates
-    for path in tqdm(paths, desc="Loading thumbnails"):
-        frame = int(path.split("_")[-1].split(".")[0])
-        image = cv2.imread(path)
-        image = cv2.resize(image, (width, height))[:, :, ::-1]
-        image = image[crop_margin:height - crop_margin]
-        thumbnails[frame] = image
-    data_df = pd.DataFrame({"x": x, "y": y, "z": z, "angle": angle, "frame": frames, "thumbnail": list(thumbnails.values())})
+    data_df = pd.DataFrame({"x": x, "y": y, "z": z, "angle": angle, "thumbnail": list(od.values())})
+    data_df.index = coords[:, 0]
     data_df.to_hdf("data/" + region + "/processed/data.hdf5", key="df", index=False)
     construct_spatial_graph(data_df, region)
     process_labels(region)

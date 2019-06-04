@@ -336,7 +336,7 @@ register(
     id='Hyrule-v0',
     entry_point='gym.envs.hyrule:HyruleEnv',
     kwargs={'obs_type': 'image'},
-    max_episode_steps=100,
+    max_episode_steps=10000,
 )
 
 # Robotics
