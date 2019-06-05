@@ -65,7 +65,10 @@ class HyruleEnv(gym.GoalEnv):
         self.agent_dir = self.norm_angle(self.agent_dir)
 
     def transition(self):
-        """ This function calculates the angles to the other panos then transitions to the one that is closest to the agent's current direction"""
+        """
+        This function calculates the angles to the other panos
+        then transitions to the one that is closest to the agent's current direction
+        """
         neighbors = {}
         for n in [edge[1] for edge in list(self.G.edges(self.agent_pos))]:
             x = self.G.nodes[n]['coords'][0] - self.G.nodes[self.agent_pos]['coords'][0]
@@ -121,17 +124,23 @@ class HyruleEnv(gym.GoalEnv):
         return res_img
 
     def calc_achieved_goal(self):
-        achieved_goal = [-1]
+        achieved_goal = []
 
         # get the labels for this pano
         pano_labels = self.label_df[self.label_df.frame == self.agent_pos]
+
         # Check if there are any labels for this frame
         if pano_labels.any().any():
             # Check if there is a house number at this frame
             house_numbers = pano_labels[pano_labels.obj_type == 'house_number']
-            if house_numbers.any().any():
-                # return a list of house numbers
-                achieved_goal = [int(x) for x in house_numbers.val.values.tolist()]
+            for val in house_numbers.val:
+                matches = self.label_df[self.label_df.val == val]
+                areas = []
+                for coords in [x for x in matches['coords'].values]:
+                    areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
+                if matches.iloc[areas.index(max(areas))].frame == self.agent_pos:
+                    achieved_goal.append(val)
+        print(achieved_goal)
         return achieved_goal
 
     def reset(self):
