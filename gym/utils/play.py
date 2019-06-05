@@ -13,7 +13,6 @@ except ImportError as e:
     plt = None
 from pygame.locals import VIDEORESIZE
 
-
 def display_arr(screen, arr, video_size, transpose):
     arr_min, arr_max = arr.min(), arr.max()
     arr = 255.0 * (arr - arr_min) / (arr_max - arr_min)
@@ -167,7 +166,6 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
 
         pygame.display.flip()
         clock.tick(fps)
-
     pygame.quit()
 
 class PlayPlot(object):
