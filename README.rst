@@ -4,6 +4,8 @@ Hyrule-Gym
 
 Hyrule-gym is an environment built on the OpenAI gym toolkit. After cloning the repo and installing any necessary software (it should all be pip installable...), simply run `python gym/utils/play.py` to view the agent running around
 
+![Alt Text](data/going_to_element.gif)
+
 
 Prerequisites to construct your own environment from 360 video:
 
