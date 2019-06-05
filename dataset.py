@@ -1,40 +1,30 @@
 """ pre-process and write the labels, spatial graph, and lower resolution images to disk """
 from __future__ import print_function, division
 import glob
+import collections
 import xml.etree.ElementTree as et
 from tqdm import tqdm
 import networkx as nx
 import pandas as pd
 import numpy as np
-import collections
 import cv2
 
 def process_labels(region):
-    labels = {}
+    """ This function processes the labels into a nice format for the simulator"""
+    labels = []
     for path in glob.glob("data/" + region + "/raw/labels/*.xml"):
         xtree = et.parse(path)
         xroot = xtree.getroot()
         for node in xroot:
-            object_types = []
-            bndboxes = []
-            vals = []
-            frame = path.split(" ")[1]
-
-            if node.tag == "object":
-                name = node.find("name").text
-                try:
-                    object_type, val = name.split("-")
-                except ValueError:
-                    val = None
-                    object_type = name
-
-                bndboxes.append((node.find("bndbox").find("xmin").text, node.find("bndbox").find("xmax").text, node.find("bndbox").find("ymin").text, node.find("bndbox").find("ymax").text))
-                vals.append(val)
-                object_types.append(object_type)
-            labels[int(frame) - 1] = (int(frame) - 1, object_types, vals, bndboxes)
-
-    label_df = pd.DataFrame(labels).T
-    label_df.columns = ["frame", "obj_type", "house_number", "label_coords"]
+            if node.tag != "object":
+                continue
+            frame = path.split("_")[-1].split(".")[0]
+            name = node.find("name").text
+            obj_type, val = name.split("-")
+            bndbox = (node.find("bndbox").find("xmin").text, node.find("bndbox").find("xmax").text, node.find("bndbox").find("ymin").text, node.find("bndbox").find("ymax").text)
+            labels.append((int(frame) - 1, obj_type, val, bndbox))
+    label_df = pd.DataFrame(labels)
+    label_df.columns = ["frame", "obj_type", "val", "coords"]
     label_df.to_hdf("data/" + region + "/processed/labels.hdf5", key="df", index=False)
 
 

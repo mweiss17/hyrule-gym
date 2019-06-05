@@ -32,6 +32,15 @@ class HyruleEnv(gym.GoalEnv):
         RIGHT_BIG = 4
         DONE = 5
 
+    @classmethod
+    def norm_angle(cls, x):
+        # Utility function to keep some angles in the space of -180 to 180 degrees
+        if x > 180:
+            x = -360 + x
+        elif x < -180:
+            x = 360 + x
+        return x
+
     def __init__(self, region="saint-urbain", obs_type='image', obs_shape=(84, 84, 3)):
         self.viewer = None
         self._action_set = HyruleEnv.Actions
@@ -40,13 +49,8 @@ class HyruleEnv(gym.GoalEnv):
         self.data_df = pd.read_hdf("data/" + region + "/processed/data.hdf5", key='df', mode='r')
         self.label_df = pd.read_hdf("data/" + region + "/processed/labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle("data/" + region + "/processed/graph.pkl")
-
-    def norm_angle(self, x):
-        if x > 180:
-            x = -360 + x
-        elif x < -180:
-            x = 360 + x
-        return x
+        self.agent_pos = 0
+        self.agent_dir = 0
 
     def turn(self, action):
         action = self._action_set(action)
@@ -61,8 +65,7 @@ class HyruleEnv(gym.GoalEnv):
         self.agent_dir = self.norm_angle(self.agent_dir)
 
     def transition(self):
-        """ This function calculates the angles to the other """
-
+        """ This function calculates the angles to the other panos then transitions to the one that is closest to the agent's current direction"""
         neighbors = {}
         for n in [edge[1] for edge in list(self.G.edges(self.agent_pos))]:
             x = self.G.nodes[n]['coords'][0] - self.G.nodes[self.agent_pos]['coords'][0]
@@ -72,9 +75,7 @@ class HyruleEnv(gym.GoalEnv):
 
         if neighbors[min(neighbors, key=neighbors.get)] > 60:
             return # noop
-
         self.agent_pos = min(neighbors, key=neighbors.get)
-
 
     def step(self, a):
         action = self._action_set(a)
@@ -82,13 +83,13 @@ class HyruleEnv(gym.GoalEnv):
             self.turn(action)
         elif action == self.Actions.FORWARD:
             self.transition()
-        ob = self._get_image()
-
-        reward = self.compute_reward(self.achieved_goal, self.desired_goal, {})
+        obs = self._get_image()
+        achieved_goal = self.calc_achieved_goal()
+        reward = self.compute_reward(achieved_goal, self.desired_goal, {})
         done = False
         if reward:
             done = True
-        return ob, reward, done, {'achieved_goal': self.achieved_goal}
+        return obs, reward, done, {'achieved_goal': achieved_goal}
 
 
     def _get_image(self, high_res=False, plot=False):
@@ -119,27 +120,25 @@ class HyruleEnv(gym.GoalEnv):
             plt.show()
         return res_img
 
+    def calc_achieved_goal(self):
+        achieved_goal = [-1]
+
+        # get the labels for this pano
+        pano_labels = self.label_df[self.label_df.frame == self.agent_pos]
+        # Check if there are any labels for this frame
+        if pano_labels.any().any():
+            # Check if there is a house number at this frame
+            house_numbers = pano_labels[pano_labels.obj_type == 'house_number']
+            if house_numbers.any().any():
+                # return a list of house numbers
+                achieved_goal = [int(x) for x in house_numbers.val.values.tolist()]
+        return achieved_goal
+
     def reset(self):
         self.agent_pos = 0 #np.random.choice(self.G.nodes)
         self.agent_dir = 0 #random.uniform(0, 1)
-        self.desired_goal = 1 # np.random.choice(self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])]["house_number"])
-        try:
-            self.achieved_goal = self.label_df.loc[self.agent_pos]["house_number"]
-        except Exception as e:
-            self.achieved_goal = ['-1']
-        return {"observation": self._get_image(), "achieved_goal": self.achieved_goal, "desired_goal": self.desired_goal}
-
-    def get_labels(self):
-        coords = label['label_coords']
-        pano_width = 3840
-        pano_height = 2160
-
-        rel_coords = (int(coords[0]) / pano_width, int(coords[1]) / self.pano_width, int(coords[2]) / pano_height, int(coords[3]) / pano_height)
-
-        if not(rel_coords[0] - self.agent_dir > 0 and rel_coords[1] < self.agent_dir + (1/3)):
-            label=pd.Series()
-            rel_coords=None
-        return label, rel_coords
+        self.desired_goal = 6650 # np.random.choice(self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])]["house_number"])
+        return {"observation": self._get_image(), "achieved_goal": self.calc_achieved_goal(), "desired_goal": self.desired_goal}
 
     def compute_reward(self, achieved_goal, desired_goal, info):
         """Compute the step reward. This externalizes the reward function and makes
@@ -160,6 +159,7 @@ class HyruleEnv(gym.GoalEnv):
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
         if desired_goal in achieved_goal:
+            print("achieved goal")
             return 1.0
         return 0.0
 
