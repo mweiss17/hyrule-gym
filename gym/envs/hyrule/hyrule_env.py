@@ -48,9 +48,10 @@ class HyruleEnv(gym.GoalEnv):
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
-        self.data_df = pd.read_hdf("/Users/martinweiss/code/academic/hyrule-gym/data/" + region + "/processed/data.hdf5", key='df', mode='r')
-        self.label_df = pd.read_hdf("/Users/martinweiss/code/academic/hyrule-gym/data/" + region + "/processed/labels.hdf5", key='df', mode='r')
-        self.G = nx.read_gpickle("/Users/martinweiss/code/academic/hyrule-gym/data/" + region + "/processed/graph.pkl")
+        path = "/home/martin/"#"/Users/martinweiss/code/academic/"
+        self.data_df = pd.read_hdf(path + "hyrule-gym/data/" + region + "/processed/data.hdf5", key='df', mode='r')
+        self.label_df = pd.read_hdf(path + "hyrule-gym/data/" + region + "/processed/labels.hdf5", key='df', mode='r')
+        self.G = nx.read_gpickle(path + "hyrule-gym/data/" + region + "/processed/graph.pkl")
         self.agent_pos = 0
         self.agent_dir = 0
 
