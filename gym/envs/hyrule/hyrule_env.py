@@ -57,13 +57,13 @@ class HyruleEnv(gym.GoalEnv):
     def turn(self, action):
         action = self._action_set(action)
         if action == self.Actions.LEFT_BIG:
-            self.agent_dir -= 120
+            self.agent_dir -= 67.5
         if action == self.Actions.LEFT_SMALL:
-            self.agent_dir -= 40
+            self.agent_dir -= 22.5
         if action == self.Actions.RIGHT_SMALL:
-            self.agent_dir += 40
+            self.agent_dir += 22.5
         if action == self.Actions.RIGHT_BIG:
-            self.agent_dir += 120
+            self.agent_dir += 67.5
         self.agent_dir = self.norm_angle(self.agent_dir)
 
     def transition(self):
