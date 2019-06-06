@@ -30,7 +30,8 @@ class HyruleEnv(gym.GoalEnv):
         FORWARD = 2
         RIGHT_SMALL = 3
         RIGHT_BIG = 4
-        DONE = 5
+        NOOP = 5
+        DONE = 6
 
     @classmethod
     def norm_angle(cls, x):
@@ -81,17 +82,20 @@ class HyruleEnv(gym.GoalEnv):
         self.agent_pos = min(neighbors, key=neighbors.get)
 
     def step(self, a):
-        action = self._action_set(a)
-        if action != self.Actions.FORWARD:
-            self.turn(action)
-        elif action == self.Actions.FORWARD:
-            self.transition()
-        obs = self._get_image()
-        achieved_goal = self.calc_achieved_goal()
-        reward = self.compute_reward(achieved_goal, self.desired_goal, {})
         done = False
-        if reward:
+        reward = 0.0
+        achieved_goal = []
+        action = self._action_set(a)
+        if action == self.Actions.FORWARD:
+            self.transition()
+        elif action == self.Actions.DONE:
             done = True
+            achieved_goal = self.calc_achieved_goal()
+            reward = self.compute_reward(achieved_goal, self.desired_goal, {})
+            print("reward: " + str(reward))
+        else:
+            self.turn(action)
+        obs = self._get_image()
         return obs, reward, done, {'achieved_goal': achieved_goal}
 
 
@@ -139,7 +143,7 @@ class HyruleEnv(gym.GoalEnv):
                 for coords in [x for x in matches['coords'].values]:
                     areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
                 if matches.iloc[areas.index(max(areas))].frame == self.agent_pos:
-                    achieved_goal.append(val)
+                    achieved_goal.append(int(val))
         print(achieved_goal)
         return achieved_goal
 
@@ -147,6 +151,7 @@ class HyruleEnv(gym.GoalEnv):
         self.agent_pos = 0 #np.random.choice(self.G.nodes)
         self.agent_dir = 0 #random.uniform(0, 1)
         self.desired_goal = 6650 # np.random.choice(self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])]["house_number"])
+        print("desired goal: " + str(self.desired_goal))
         return {"observation": self._get_image(), "achieved_goal": self.calc_achieved_goal(), "desired_goal": self.desired_goal}
 
     def compute_reward(self, achieved_goal, desired_goal, info):
@@ -199,6 +204,7 @@ class HyruleEnv(gym.GoalEnv):
             'RIGHT_SMALL': ord('f'),
             'RIGHT_BIG': ord(' '),
             'DONE': ord('p'),
+            'NOOP': ord('n'),
         }
 
         keys_to_action = {}
