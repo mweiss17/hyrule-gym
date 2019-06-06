@@ -1,6 +1,7 @@
 """ This is the simulator for NAVI project. It defines the action and observation spaces, tracks the agent's state, and specifies game logic. """
 from __future__ import print_function, division
 import enum
+import os
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -47,9 +48,9 @@ class HyruleEnv(gym.GoalEnv):
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
-        self.data_df = pd.read_hdf("data/" + region + "/processed/data.hdf5", key='df', mode='r')
-        self.label_df = pd.read_hdf("data/" + region + "/processed/labels.hdf5", key='df', mode='r')
-        self.G = nx.read_gpickle("data/" + region + "/processed/graph.pkl")
+        self.data_df = pd.read_hdf("/Users/martinweiss/code/academic/hyrule-gym/data/" + region + "/processed/data.hdf5", key='df', mode='r')
+        self.label_df = pd.read_hdf("/Users/martinweiss/code/academic/hyrule-gym/data/" + region + "/processed/labels.hdf5", key='df', mode='r')
+        self.G = nx.read_gpickle("/Users/martinweiss/code/academic/hyrule-gym/data/" + region + "/processed/graph.pkl")
         self.agent_pos = 0
         self.agent_dir = 0
 
@@ -80,6 +81,9 @@ class HyruleEnv(gym.GoalEnv):
         if neighbors[min(neighbors, key=neighbors.get)] > 60:
             return # noop
         self.agent_pos = min(neighbors, key=neighbors.get)
+
+    def set_difficulty(self, difficulty):
+        return
 
     def step(self, a):
         done = False
