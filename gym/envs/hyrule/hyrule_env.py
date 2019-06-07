@@ -48,7 +48,7 @@ class HyruleEnv(gym.GoalEnv):
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
-        path = "/home/martin/"#"/Users/martinweiss/code/academic/"
+        path = "/Users/martinweiss/code/academic/" # "/home/martin/"
         self.data_df = pd.read_hdf(path + "hyrule-gym/data/" + region + "/processed/data.hdf5", key='df', mode='r')
         self.label_df = pd.read_hdf(path + "hyrule-gym/data/" + region + "/processed/labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "hyrule-gym/data/" + region + "/processed/graph.pkl")
@@ -89,19 +89,20 @@ class HyruleEnv(gym.GoalEnv):
     def step(self, a):
         done = False
         reward = 0.0
-        achieved_goal = []
         action = self._action_set(a)
+        visible_text = self.get_visible_text()
+
         if action == self.Actions.FORWARD:
             self.transition()
         elif action == self.Actions.DONE:
             done = True
-            achieved_goal = self.calc_achieved_goal()
-            reward = self.compute_reward(achieved_goal, self.desired_goal, {})
+            reward = self.compute_reward(visible_text, self.desired_goal, {})
             print("reward: " + str(reward))
         else:
             self.turn(action)
-        obs = self._get_image()
-        return obs, reward, done, {'achieved_goal': achieved_goal}
+        print(visible_text)
+        obs = {"image": self._get_image(), "mission": self.desired_goal, "rel_gps": [0, 0], "visible_text": visible_text}
+        return obs, reward, done, {}
 
 
     def _get_image(self, high_res=False, plot=False):
@@ -132,34 +133,31 @@ class HyruleEnv(gym.GoalEnv):
             plt.show()
         return res_img
 
-    def calc_achieved_goal(self):
-        achieved_goal = []
-
-        # get the labels for this pano
+    def get_visible_text(self):
+        visible_text = {"house_numbers": [], "street_signs": []}
         pano_labels = self.label_df[self.label_df.frame == self.agent_pos]
 
-        # Check if there are any labels for this frame
-        if pano_labels.any().any():
-            # Check if there is a house number at this frame
-            house_numbers = pano_labels[pano_labels.obj_type == 'house_number']
-            for val in house_numbers.val:
-                matches = self.label_df[self.label_df.val == val]
-                areas = []
-                for coords in [x for x in matches['coords'].values]:
-                    areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
-                if matches.iloc[areas.index(max(areas))].frame == self.agent_pos:
-                    achieved_goal.append(int(val))
-        print(achieved_goal)
-        return achieved_goal
+        if not pano_labels.any().any():
+            return visible_text
+
+        for house_number in pano_labels[pano_labels.obj_type == 'house_number'].val:
+            matches = self.label_df[self.label_df.val == house_number]
+            areas = []
+            for coords in [x for x in matches['coords'].values]:
+                areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
+            if matches.iloc[areas.index(max(areas))].frame == self.agent_pos:
+                visible_text["house_numbers"].append(int(house_number))
+                # import pdb; pdb.set_trace()
+        return visible_text
 
     def reset(self):
         self.agent_pos = 0 #np.random.choice(self.G.nodes)
         self.agent_dir = 0 #random.uniform(0, 1)
         self.desired_goal = 6650 # np.random.choice(self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])]["house_number"])
         print("desired goal: " + str(self.desired_goal))
-        return {"observation": self._get_image(), "achieved_goal": self.calc_achieved_goal(), "desired_goal": self.desired_goal}
+        return {"observation": self._get_image(), "achieved_goal": self.get_visible_text(), "desired_goal": self.desired_goal}
 
-    def compute_reward(self, achieved_goal, desired_goal, info):
+    def compute_reward(self, visible_text, desired_goal, info):
         """Compute the step reward. This externalizes the reward function and makes
         it dependent on an a desired goal and the one that was achieved. If you wish to include
         additional rewards that are independent of the goal, you can include the necessary values
@@ -177,7 +175,7 @@ class HyruleEnv(gym.GoalEnv):
                 ob, reward, done, info = env.step()
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
-        if desired_goal in achieved_goal:
+        if desired_goal in visible_text["house_numbers"]:
             print("achieved goal")
             return 1.0
         return 0.0
