@@ -25,8 +25,7 @@ def process_labels(region):
             labels.append((int(frame) - 1, obj_type, val, bndbox))
     label_df = pd.DataFrame(labels)
     label_df.columns = ["frame", "obj_type", "val", "coords"]
-    label_df.to_hdf("data/" + region + "/processed/labels.hdf5", key="df", index=False)
-
+    return label_df
 
 def construct_spatial_graph(data_df, region="saint-urbain"):
     """ Filter the pano coordinates by spatial relation and write the filtered graph to disk"""
@@ -64,18 +63,18 @@ def create_dataset(region="saint-urbain", limit=None):
     Loads in the pano images from disk, crops them, resizes them, and writes them to disk.
     Then pre-processes the pose data associated with the image and calls the fn to create the graph and to process the labels
     """
+    label_df = process_labels(region)
 
     #get png names and apply limit
     paths = glob.glob("data/" + region + "/panos/*.png")
     if limit:
         paths = paths[:limit]
 
-    # Init Variables
+    # do electronic stabilization and resize the images
     height = 126
     width = 224
     crop_margin = int(height * (1/6))
 
-    frames = []
     thumbnails = {}
     if limit:
         coords = np.load("data/" + region + "/processed/pos_ang.npy")[:limit]
@@ -86,9 +85,23 @@ def create_dataset(region="saint-urbain", limit=None):
     for path in tqdm(paths, desc="Loading thumbnails"):
         frame = int(path.split("_")[-1].split(".")[0]) - 1
         image = cv2.imread(path)
+        shape = image.shape[0:2]
         image = cv2.resize(image, (width, height))[:, :, ::-1]
         image = image[crop_margin:height - crop_margin]
         thumbnails[frame] = image
+
+        # change label coords to mini space
+        labels = label_df[label_df["frame"] == frame]
+        if labels.any().any():
+            for idx, row in labels.iterrows():
+                row_coords = [int(x) for x in row["coords"]]
+                new_coords = (int(width * row_coords[0] / shape[1]),
+                              int(width * row_coords[1] / shape[1]),
+                              int((height - 2 * crop_margin) * row_coords[2] / shape[0]),
+                              int((height - 2 * crop_margin) * row_coords[3] / shape[0]))
+                label_df.at[idx, "coords"] = new_coords
+    label_df.to_hdf("data/" + region + "/processed/labels.hdf5", key="df", index=False)
+
     od = collections.OrderedDict(sorted(thumbnails.items()))
     coords = coords[coords[:, 0].argsort()]
     coords[:, 0] = np.array([int(x) - 1 for x in coords[:, 0]])
@@ -117,4 +130,3 @@ def create_dataset(region="saint-urbain", limit=None):
     data_df.index = coords[:, 0]
     data_df.to_hdf("data/" + region + "/processed/data.hdf5", key="df", index=False)
     construct_spatial_graph(data_df, region)
-    process_labels(region)

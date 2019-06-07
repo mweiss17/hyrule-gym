@@ -90,7 +90,8 @@ class HyruleEnv(gym.GoalEnv):
         done = False
         reward = 0.0
         action = self._action_set(a)
-        visible_text = self.get_visible_text()
+        image, x, w = self._get_image()
+        visible_text = self.get_visible_text(x, w)
 
         if action == self.Actions.FORWARD:
             self.transition()
@@ -101,7 +102,7 @@ class HyruleEnv(gym.GoalEnv):
         else:
             self.turn(action)
         print(visible_text)
-        obs = {"image": self._get_image(), "mission": self.desired_goal, "rel_gps": [0, 0], "visible_text": visible_text}
+        obs = {"image": image, "mission": self.desired_goal, "rel_gps": [0, 0], "visible_text": visible_text}
         return obs, reward, done, {}
 
 
@@ -131,31 +132,38 @@ class HyruleEnv(gym.GoalEnv):
             _, ax = plt.subplots(figsize=(18, 18))
             ax.imshow(res_img.astype(int))
             plt.show()
-        return res_img
+        return res_img, x, w
 
-    def get_visible_text(self):
+    def get_visible_text(self, x, w):
         visible_text = {"house_numbers": [], "street_signs": []}
         pano_labels = self.label_df[self.label_df.frame == self.agent_pos]
 
         if not pano_labels.any().any():
             return visible_text
 
-        for house_number in pano_labels[pano_labels.obj_type == 'house_number'].val:
-            matches = self.label_df[self.label_df.val == house_number]
-            areas = []
-            for coords in [x for x in matches['coords'].values]:
-                areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
-            if matches.iloc[areas.index(max(areas))].frame == self.agent_pos:
-                visible_text["house_numbers"].append(int(house_number))
-                # import pdb; pdb.set_trace()
+        for idx, row in pano_labels[pano_labels.obj_type == 'house_number'].iterrows():
+            if x < row['coords'][0] and x+w > row['coords'][1]:
+                visible_text["house_numbers"].append(int(row["val"]))
         return visible_text
+
 
     def reset(self):
         self.agent_pos = 0 #np.random.choice(self.G.nodes)
         self.agent_dir = 0 #random.uniform(0, 1)
         self.desired_goal = 6650 # np.random.choice(self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])]["house_number"])
         print("desired goal: " + str(self.desired_goal))
-        return {"observation": self._get_image(), "achieved_goal": self.get_visible_text(), "desired_goal": self.desired_goal}
+        image, x, w = self._get_image()
+        return {"image": image, "achieved_goal": self.get_visible_text(x, w), "desired_goal": self.desired_goal}
+
+
+    def closest_pano(self, house_number):
+        areas = []
+        house_number = str(house_number)
+        matches = self.label_df[self.label_df.val == house_number]
+        for coords in [x for x in matches['coords'].values]:
+            areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
+        match = matches.iloc[areas.index(max(areas))]
+        return match
 
     def compute_reward(self, visible_text, desired_goal, info):
         """Compute the step reward. This externalizes the reward function and makes
@@ -175,13 +183,13 @@ class HyruleEnv(gym.GoalEnv):
                 ob, reward, done, info = env.step()
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
-        if desired_goal in visible_text["house_numbers"]:
+        if desired_goal in visible_text["house_numbers"] and self.agent_pos == self.closest_pano(desired_goal).frame:
             print("achieved goal")
             return 1.0
         return 0.0
 
     def render(self, mode='human'):
-        img = self._get_image()
+        img, x, w = self._get_image()
         if mode == 'rgb_array':
             return img
         elif mode == 'human':
