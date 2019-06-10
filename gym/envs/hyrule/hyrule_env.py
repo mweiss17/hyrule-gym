@@ -51,8 +51,12 @@ class HyruleEnv(gym.GoalEnv):
         self.data_df = pd.read_hdf(path + "hyrule-gym/data/" + region + "/processed/data.hdf5", key='df', mode='r')
         self.label_df = pd.read_hdf(path + "hyrule-gym/data/" + region + "/processed/labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "hyrule-gym/data/" + region + "/processed/graph.pkl")
+
         self.agent_pos = 0
         self.agent_dir = 0
+
+        self.difficulty = 1
+        self.weighted = True
 
     def turn(self, action):
         action = self._action_set(action)
@@ -73,6 +77,21 @@ class HyruleEnv(gym.GoalEnv):
         angle = math.atan2(y, x) * 180 / np.pi
         return np.abs(self.norm_angle(angle - self.agent_dir))# - 67.5
 
+    def select_goal(self, difficulty=0):
+        goals = []
+        if self.G.nodes[self.agent_pos]["goals_achieved"]:
+            goals[self.agent_pos] = self.G[self.agent_pos]["goals_achieved"]
+
+        for _, sink in nx.bfs_edges(self.G, self.agent_pos):
+            if self.G.nodes[sink]["goals_achieved"]:
+                goals.append({"house_numbers": self.G.nodes[sink]["goals_achieved"], "path_length": len(nx.shortest_path(self.G, self.agent_pos, target=sink)), "frame": sink})
+
+        goal = sorted(goals,key= lambda d: d['path_length'])[difficulty]
+        goal["house_number"] = np.random.choice(goal["house_numbers"])
+        del goal["house_numbers"]
+        return goal
+
+
     def transition(self):
         """
         This function calculates the angles to the other panos
@@ -86,7 +105,8 @@ class HyruleEnv(gym.GoalEnv):
         self.agent_pos = min(neighbors, key=neighbors.get)
 
     def set_difficulty(self, difficulty):
-        return
+        self.difficulty = difficulty
+        self.weighted = weighted
 
     def step(self, a):
         done = False
@@ -162,9 +182,9 @@ class HyruleEnv(gym.GoalEnv):
     def reset(self):
         self.agent_pos = 0 #np.random.choice(self.G.nodes)
         self.agent_dir = 0 #random.uniform(0, 1)
-        self.desired_goal = 6650 # np.random.choice(self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])]["house_number"])
+        self.desired_goal = self.select_goal()
         self.agent_gps = self.sample_gps(self.data_df.loc[self.agent_pos])
-        self.target_gps = self.sample_gps(self.data_df.loc[self.closest_pano(self.desired_goal)["frame"]], scale=3.0)
+        self.target_gps = self.sample_gps(self.data_df.loc[self.desired_goal["frame"]], scale=3.0)
         print("self.target_gps: " + str(self.target_gps))
         print("self.agent_gps: " + str(self.agent_gps))
         image, x, w = self._get_image()
@@ -172,7 +192,7 @@ class HyruleEnv(gym.GoalEnv):
 
     def oracular_spectacular(self):
         # prints the ideal way to navigate to the desired goal
-        target = self.closest_pano(self.desired_goal)
+        target = self.desired_goal["frame"]
         path = nx.shortest_path(self.G, self.agent_pos, target=target["frame"])
         actions = []
         agent_dir = self.agent_dir
@@ -191,14 +211,6 @@ class HyruleEnv(gym.GoalEnv):
             actions.append(self.Actions.FORWARD)
         return actions
 
-    def closest_pano(self, house_number):
-        areas = []
-        house_number = str(house_number)
-        matches = self.label_df[self.label_df.val == house_number]
-        for coords in [x for x in matches['coords'].values]:
-            areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
-        match = matches.iloc[areas.index(max(areas))]
-        return match
 
     def compute_reward(self, visible_text, desired_goal, info):
         """Compute the step reward. This externalizes the reward function and makes
@@ -218,7 +230,7 @@ class HyruleEnv(gym.GoalEnv):
                 ob, reward, done, info = env.step()
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
-        if desired_goal in visible_text["house_numbers"] and self.agent_pos == self.closest_pano(desired_goal).frame:
+        if desired_goal in visible_text["house_numbers"] and desired_goal in self.G[self.agent_pos]["goals_achieved"]:
             print("achieved goal")
             return 1.0
         return 0.0

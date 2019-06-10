@@ -27,13 +27,13 @@ def process_labels(region):
     label_df.columns = ["frame", "obj_type", "val", "coords"]
     return label_df
 
-def construct_spatial_graph(data_df, region="saint-urbain"):
+def construct_spatial_graph(data_df, label_df, region="saint-urbain"):
     """ Filter the pano coordinates by spatial relation and write the filtered graph to disk"""
     # Init graph
     G = nx.Graph()
     G.add_nodes_from(data_df.index.values.tolist())
     nodes = G.nodes
-    max_node_distance = 1.
+    max_node_distance = 1.5
 
     for node_1 in nodes:
         # write pano metadata to nodes
@@ -54,6 +54,24 @@ def construct_spatial_graph(data_df, region="saint-urbain"):
             if node_distance > max_node_distance:
                 continue
             G.add_edge(node_1, node_2, weight=node_distance)
+
+    # find target panos -- they are the ones with the biggest bounding box around the house number
+    goal_panos = {}
+    for house_number in label_df[label_df.obj_type == "house_number"]["val"].unique():
+        house_number = str(house_number)
+        matches = label_df[label_df.val == house_number]
+        areas = []
+        for coords in [x for x in matches['coords'].values]:
+            areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
+        goal_pano = matches.iloc[areas.index(max(areas))]
+        goal_panos[goal_pano["frame"]] = goal_pano
+
+    for node in nodes:
+        G.nodes[node]['goals_achieved'] = []
+
+    for node in nodes:
+        if node in goal_panos.keys():
+            G.nodes[node]['goals_achieved'].append(int(goal_panos[node]["val"]))
 
     nx.write_gpickle(G, "data/" + region + "/processed/graph.pkl")
     return G
@@ -129,4 +147,4 @@ def create_dataset(region="saint-urbain", limit=None):
     data_df = pd.DataFrame({"x": x, "y": y, "z": z, "angle": angle, "thumbnail": list(od.values())})
     data_df.index = coords[:, 0]
     data_df.to_hdf("data/" + region + "/processed/data.hdf5", key="df", index=False)
-    construct_spatial_graph(data_df, region)
+    construct_spatial_graph(data_df, label_df, region)
