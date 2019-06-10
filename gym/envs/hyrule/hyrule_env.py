@@ -1,13 +1,12 @@
 """ This is the simulator for NAVI project. It defines the action and observation spaces, tracks the agent's state, and specifies game logic. """
 from __future__ import print_function, division
 import enum
-import os
+import math
 import numpy as np
 import pandas as pd
 import networkx as nx
-import cv2
-import math
 from matplotlib import pyplot as plt
+import cv2
 import gym
 from gym import spaces
 
@@ -67,6 +66,13 @@ class HyruleEnv(gym.GoalEnv):
             self.agent_dir += 67.5
         self.agent_dir = self.norm_angle(self.agent_dir)
 
+
+    def get_angle_between_nodes(self, n1, n2):
+        x = self.G.nodes[n1]['coords'][0] - self.G.nodes[n2]['coords'][0]
+        y = self.G.nodes[n1]['coords'][1] - self.G.nodes[n2]['coords'][1]
+        angle = math.atan2(y, x) * 180 / np.pi
+        return np.abs(self.norm_angle(angle - self.agent_dir))# - 67.5
+
     def transition(self):
         """
         This function calculates the angles to the other panos
@@ -74,11 +80,7 @@ class HyruleEnv(gym.GoalEnv):
         """
         neighbors = {}
         for n in [edge[1] for edge in list(self.G.edges(self.agent_pos))]:
-            x = self.G.nodes[n]['coords'][0] - self.G.nodes[self.agent_pos]['coords'][0]
-            y = self.G.nodes[n]['coords'][1] - self.G.nodes[self.agent_pos]['coords'][1]
-            angle = math.atan2(y, x) * 180 / np.pi
-            neighbors[n] = np.abs(self.norm_angle(angle - self.agent_dir))# - 67.5
-
+            neighbors[n] = self.get_angle_between_nodes(n, self.agent_pos)
         if neighbors[min(neighbors, key=neighbors.get)] > 60:
             return # noop
         self.agent_pos = min(neighbors, key=neighbors.get)
@@ -101,8 +103,13 @@ class HyruleEnv(gym.GoalEnv):
             print("reward: " + str(reward))
         else:
             self.turn(action)
-        print(visible_text)
-        obs = {"image": image, "mission": self.desired_goal, "rel_gps": [0, 0], "visible_text": visible_text}
+        #print(visible_text)
+        print(self.agent_pos)
+        print(self.agent_dir)
+        self.agent_gps = self.sample_gps(self.data_df.loc[self.agent_pos])
+        rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
+        print(rel_gps)
+        obs = {"image": image, "mission": self.desired_goal, "rel_gps": rel_gps, "visible_text": visible_text}
         return obs, reward, done, {}
 
 
@@ -146,15 +153,43 @@ class HyruleEnv(gym.GoalEnv):
                 visible_text["house_numbers"].append(int(row["val"]))
         return visible_text
 
+    def sample_gps(self, groundtruth, scale=1):
+        x, y = groundtruth[['x', 'y']]
+        x = x + np.random.normal(loc=0.0, scale=scale)
+        y = y + np.random.normal(loc=0.0, scale=scale)
+        return (x, y)
 
     def reset(self):
         self.agent_pos = 0 #np.random.choice(self.G.nodes)
         self.agent_dir = 0 #random.uniform(0, 1)
         self.desired_goal = 6650 # np.random.choice(self.label_df.iloc[np.random.randint(0, self.label_df.shape[0])]["house_number"])
-        print("desired goal: " + str(self.desired_goal))
+        self.agent_gps = self.sample_gps(self.data_df.loc[self.agent_pos])
+        self.target_gps = self.sample_gps(self.data_df.loc[self.closest_pano(self.desired_goal)["frame"]], scale=3.0)
+        print("self.target_gps: " + str(self.target_gps))
+        print("self.agent_gps: " + str(self.agent_gps))
         image, x, w = self._get_image()
         return {"image": image, "achieved_goal": self.get_visible_text(x, w), "desired_goal": self.desired_goal}
 
+    def oracular_spectacular(self):
+        # prints the ideal way to navigate to the desired goal
+        target = self.closest_pano(self.desired_goal)
+        path = nx.shortest_path(self.G, self.agent_pos, target=target["frame"])
+        actions = []
+        agent_dir = self.agent_dir
+        for idx, node in enumerate(path):
+            if idx + 1 == len(path):
+                break
+            next_node = path[idx + 1]
+            angle = self.get_angle_between_nodes(node, next_node)
+            while np.abs(angle - agent_dir) > 30:
+                if np.sign(angle - agent_dir) == -1:
+                    agent_dir -= 22.5
+                    actions.append(self.Actions.LEFT_SMALL)
+                elif np.sign(angle - agent_dir) == 1:
+                    agent_dir += 22.5
+                    actions.append(self.Actions.RIGHT_SMALL)
+            actions.append(self.Actions.FORWARD)
+        return actions
 
     def closest_pano(self, house_number):
         areas = []
