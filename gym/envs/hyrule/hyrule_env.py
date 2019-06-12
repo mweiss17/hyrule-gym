@@ -104,7 +104,7 @@ class HyruleEnv(gym.GoalEnv):
             return # noop
         self.agent_pos = min(neighbors, key=neighbors.get)
 
-    def set_difficulty(self, difficulty):
+    def set_difficulty(self, difficulty, weighted=False):
         self.difficulty = difficulty
         # self.weighted = weighted
 
