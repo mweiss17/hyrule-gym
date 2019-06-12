@@ -182,7 +182,7 @@ class HyruleEnv(gym.GoalEnv):
     def reset(self):
         self.agent_pos = 0 #np.random.choice(self.G.nodes)
         self.agent_dir = 0 #random.uniform(0, 1)
-        self.desired_goal_pos, self.desired_goal_num = self.select_goal()
+        self.desired_goal_pos, self.desired_goal_num = self.select_goal(self.difficulty)
         self.agent_gps = self.sample_gps(self.data_df.loc[self.agent_pos])
         self.target_gps = self.sample_gps(self.data_df.loc[self.desired_goal_pos["frame"]], scale=3.0)
         image, x, w = self._get_image()
