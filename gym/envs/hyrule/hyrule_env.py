@@ -77,19 +77,18 @@ class HyruleEnv(gym.GoalEnv):
         angle = math.atan2(y, x) * 180 / np.pi
         return np.abs(self.norm_angle(angle - self.agent_dir))# - 67.5
 
-    def select_goal(self, difficulty=0):
-        goals = []
-        if self.G.nodes[self.agent_pos]["goals_achieved"]:
-            goals[self.agent_pos] = self.G[self.agent_pos]["goals_achieved"]
-
-        for _, sink in nx.bfs_edges(self.G, self.agent_pos):
-            if self.G.nodes[sink]["goals_achieved"]:
-                goals.append({"house_numbers": self.G.nodes[sink]["goals_achieved"], "path_length": len(nx.shortest_path(self.G, self.agent_pos, target=sink)), "frame": sink})
-
-        goal = sorted(goals,key= lambda d: d['path_length'])[difficulty]
-        goal["house_number"] = np.random.choice(goal["house_numbers"])
-        del goal["house_numbers"]
-        return goal
+    def select_goal(self, difficulty=1):
+        pos = np.random.choice([x for x, y in self.G.nodes(data=True) if len(y['goals_achieved']) > 0])
+        goal_pos = self.G.nodes[pos]
+        goal_num = np.random.choice(self.G.nodes[pos]["goals_achieved"])
+        seen = set()
+        while difficulty > 0:
+            neighbors = {x for x in self.G.neighbors(pos)}
+            pos = np.random.choice(list(neighbors))
+            seen = seen.union(neighbors)
+            difficulty -= 1
+        self.agent_pos = self.G.nodes[pos]["frame"]
+        return goal_pos, goal_num
 
 
     def transition(self):
@@ -106,7 +105,7 @@ class HyruleEnv(gym.GoalEnv):
 
     def set_difficulty(self, difficulty):
         self.difficulty = difficulty
-        self.weighted = weighted
+        # self.weighted = weighted
 
     def step(self, a):
         done = False
@@ -119,7 +118,7 @@ class HyruleEnv(gym.GoalEnv):
             self.transition()
         elif action == self.Actions.DONE:
             done = True
-            reward = self.compute_reward(visible_text, self.desired_goal, {})
+            reward = self.compute_reward(visible_text, self.desired_goal_pos, {})
             print("reward: " + str(reward))
         else:
             self.turn(action)
@@ -129,7 +128,7 @@ class HyruleEnv(gym.GoalEnv):
         self.agent_gps = self.sample_gps(self.data_df.loc[self.agent_pos])
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
         print(rel_gps)
-        obs = {"image": image, "mission": self.desired_goal, "rel_gps": rel_gps, "visible_text": visible_text}
+        obs = {"image": image, "mission": self.desired_goal_num, "rel_gps": rel_gps, "visible_text": visible_text}
         return obs, reward, done, {}
 
 
@@ -182,17 +181,15 @@ class HyruleEnv(gym.GoalEnv):
     def reset(self):
         self.agent_pos = 0 #np.random.choice(self.G.nodes)
         self.agent_dir = 0 #random.uniform(0, 1)
-        self.desired_goal = self.select_goal()
+        self.desired_goal_pos, self.desired_goal_num = self.select_goal()
         self.agent_gps = self.sample_gps(self.data_df.loc[self.agent_pos])
-        self.target_gps = self.sample_gps(self.data_df.loc[self.desired_goal["frame"]], scale=3.0)
-        print("self.target_gps: " + str(self.target_gps))
-        print("self.agent_gps: " + str(self.agent_gps))
+        self.target_gps = self.sample_gps(self.data_df.loc[self.desired_goal_pos["frame"]], scale=3.0)
         image, x, w = self._get_image()
-        return {"image": image, "achieved_goal": self.get_visible_text(x, w), "desired_goal": self.desired_goal}
+        return {"image": image, "achieved_goal": self.get_visible_text(x, w), "desired_goal_num": self.desired_goal_num}
 
     def oracular_spectacular(self):
         # prints the ideal way to navigate to the desired goal
-        target = self.desired_goal["frame"]
+        target = self.desired_goal_pos["frame"]
         path = nx.shortest_path(self.G, self.agent_pos, target=target["frame"])
         actions = []
         agent_dir = self.agent_dir
