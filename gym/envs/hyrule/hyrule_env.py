@@ -77,13 +77,14 @@ class HyruleEnv(gym.GoalEnv):
         angle = math.atan2(y, x) * 180 / np.pi
         return np.abs(self.norm_angle(angle - self.agent_dir))# - 67.5
 
-    def select_goal(self, difficulty=1):
+    def select_goal(self, difficulty=0):
         pos = np.random.choice([x for x, y in self.G.nodes(data=True) if len(y['goals_achieved']) > 0])
         goal_pos = self.G.nodes[pos]
         goal_num = np.random.choice(self.G.nodes[pos]["goals_achieved"])
         seen = set()
         while difficulty > 0:
             neighbors = {x for x in self.G.neighbors(pos)}
+            #neighbors = neighbors.intersection(seen)
             pos = np.random.choice(list(neighbors))
             seen = seen.union(neighbors)
             difficulty -= 1
@@ -118,7 +119,7 @@ class HyruleEnv(gym.GoalEnv):
             self.transition()
         elif action == self.Actions.DONE:
             done = True
-            reward = self.compute_reward(visible_text, self.desired_goal_pos, {})
+            reward = self.compute_reward(visible_text, self.desired_goal_num, {})
             print("reward: " + str(reward))
         else:
             self.turn(action)
@@ -227,7 +228,7 @@ class HyruleEnv(gym.GoalEnv):
                 ob, reward, done, info = env.step()
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
-        if desired_goal in visible_text["house_numbers"] and desired_goal in self.G[self.agent_pos]["goals_achieved"]:
+        if desired_goal in visible_text["house_numbers"] and desired_goal in self.G.nodes[self.agent_pos]["goals_achieved"]:
             print("achieved goal")
             return 1.0
         return 0.0
