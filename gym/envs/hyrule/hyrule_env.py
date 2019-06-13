@@ -78,15 +78,18 @@ class HyruleEnv(gym.GoalEnv):
         angle = math.atan2(y, x) * 180 / np.pi
         return np.abs(self.norm_angle(angle - self.agent_dir))# - 67.5
 
-    def select_goal(self, difficulty=2, trajectory_curric=True):
+    def select_goal(self, difficulty=1, trajectory_curric=True):
         pos = np.random.choice([x for x, y in self.G.nodes(data=True) if len(y['goals_achieved']) > 0])
         goal_pos = self.G.nodes[pos]
         goal_num = np.random.choice(self.G.nodes[pos]["goals_achieved"])
         label = self.label_df[(self.label_df.frame == goal_pos["frame"]) & (self.label_df.val == str(goal_num))]
         label_dir = 360 * ((label["coords"].values[0][0] + label["coords"].values[0][1]) / 2) / 224
         # we adjust for the agent direction discritization
-        cur_dir = label_dir - (360 * ((label["coords"].values[0][0] + label["coords"].values[0][1]) / 2) / 224) % 22.5
+
         cur_pos = pos
+        pano_rotation = self.norm_angle(self.G.node[cur_pos]['angle'])
+        cur_dir = label_dir - (360 * ((label["coords"].values[0][0] + label["coords"].values[0][1]) / 2) / 224) % 22.5
+        cur_dir = (self.norm_angle(cur_dir + pano_rotation) + 180)
 
         seen_poses = defaultdict(list)
         seen_poses[1].append(str(cur_pos) + " : " + str(cur_dir))
