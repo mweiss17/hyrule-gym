@@ -59,6 +59,9 @@ class HyruleEnv(gym.GoalEnv):
         self.difficulty = 1
         self.weighted = True
 
+        self.max_num_steps = 100
+        self.num_steps_taken = 0
+
     def turn(self, action):
         action = self._action_set(action)
         if action == self.Actions.LEFT_BIG:
@@ -171,12 +174,16 @@ class HyruleEnv(gym.GoalEnv):
         elif action == self.Actions.DONE:
             done = True
             reward = self.compute_reward(visible_text, self.desired_goal_num, {})
-            print("reward: " + str(reward))
+            #print("reward: " + str(reward))
         else:
             self.turn(action)
         self.agent_gps = self.sample_gps(self.data_df.loc[self.agent_pos])
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
         obs = {"image": image, "mission": self.desired_goal_num, "rel_gps": rel_gps, "visible_text": visible_text}
+        self.num_steps_taken += 1
+        if self.num_steps_taken >= self.max_num_steps and done == False:
+            done = True
+            reward = 0.0
         return obs, reward, done, {}
 
 
@@ -227,7 +234,8 @@ class HyruleEnv(gym.GoalEnv):
         return (x, y)
 
     def reset(self):
-        self.desired_goal_pos, self.desired_goal_num = self.select_goal(2)
+        self.num_steps_taken = 0
+        self.desired_goal_pos, self.desired_goal_num = self.select_goal(self.difficulty)
         self.agent_gps = self.sample_gps(self.data_df.loc[self.agent_pos])
         self.target_gps = self.sample_gps(self.data_df.loc[self.desired_goal_pos["frame"]], scale=3.0)
         image, x, w = self._get_image()
@@ -277,7 +285,7 @@ class HyruleEnv(gym.GoalEnv):
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
         if desired_goal in visible_text["house_numbers"] and desired_goal in self.G.nodes[self.agent_pos]["goals_achieved"]:
-            print("achieved goal")
+            #print("achieved goal")
             return 1.0
         return 0.0
 
