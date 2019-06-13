@@ -5,6 +5,7 @@ import math
 import numpy as np
 import pandas as pd
 import networkx as nx
+from collections import defaultdict
 from matplotlib import pyplot as plt
 import cv2
 import gym
@@ -77,20 +78,67 @@ class HyruleEnv(gym.GoalEnv):
         angle = math.atan2(y, x) * 180 / np.pi
         return np.abs(self.norm_angle(angle - self.agent_dir))# - 67.5
 
-    def select_goal(self, difficulty=0):
+    def select_goal(self, difficulty=2, trajectory_curric=True):
         pos = np.random.choice([x for x, y in self.G.nodes(data=True) if len(y['goals_achieved']) > 0])
         goal_pos = self.G.nodes[pos]
         goal_num = np.random.choice(self.G.nodes[pos]["goals_achieved"])
-        seen = set()
-        while difficulty > 0:
-            neighbors = {x for x in self.G.neighbors(pos)}
-            #neighbors = neighbors.intersection(seen)
-            pos = np.random.choice(list(neighbors))
-            seen = seen.union(neighbors)
-            difficulty -= 1
-        self.agent_pos = self.G.nodes[pos]["frame"]
+        label = self.label_df[(self.label_df.frame == goal_pos["frame"]) & (self.label_df.val == str(goal_num))]
+        label_dir = 360 * ((label["coords"].values[0][0] + label["coords"].values[0][1]) / 2) / 224
+        # we adjust for the agent direction discritization
+        cur_dir = label_dir - (360 * ((label["coords"].values[0][0] + label["coords"].values[0][1]) / 2) / 224) % 22.5
+        cur_pos = pos
+
+        seen_poses = defaultdict(list)
+        seen_poses[1].append(str(cur_pos) + " : " + str(cur_dir))
+        actions = []
+        if trajectory_curric:
+            neighbor = None
+            while len(actions) < difficulty:
+                if not neighbor:
+                    neighbor = np.random.choice([n for n in self.G.neighbors(cur_pos)])
+                    angle = self.get_angle_between_nodes(cur_pos, neighbor)
+
+                if np.abs(angle - cur_dir) > 45:
+                    if np.sign(angle - cur_dir) == -1:
+                        cur_dir -= 22.5
+                        actions.append(self.Actions.LEFT_SMALL)
+                    elif np.sign(angle - cur_dir) == 1:
+                        cur_dir += 22.5
+                        actions.append(self.Actions.RIGHT_SMALL)
+                else:
+                    cur_pos = neighbor
+                    neighbor = None
+                    actions.append(self.Actions.FORWARD)
+            self.agent_pos = cur_pos
+            self.agent_dir = cur_dir
+        else:
+            # randomly selects a node n-transitions from the goal node
+            nodes = set(nx.ego_graph(self.G, pos, radius=difficulty))
+            if difficulty > 1:
+                nodes -= set(nx.ego_graph(self.G, pos, radius=difficulty-1))
+            self.agent_pos = self.G.nodes[np.random.choice(list(nodes))]["frame"]
         return goal_pos, goal_num
 
+    # def shortest_path_length(self, node1, node2):
+    #     # prints the ideal way to navigate to the desired goal
+    #     target = self.desired_goal_pos["frame"]
+    #     path = nx.shortest_path(self.G, self.agent_pos, target=target["frame"])
+    #     actions = []
+    #     agent_dir = self.agent_dir
+    #     for idx, node in enumerate(path):
+    #         if idx + 1 == len(path):
+    #             break
+    #         next_node = path[idx + 1]
+    #         angle = self.get_angle_between_nodes(node, next_node)
+    #         while np.abs(angle - agent_dir) > 30:
+    #             if np.sign(angle - agent_dir) == -1:
+    #                 agent_dir -= 22.5
+    #                 actions.append(self.Actions.LEFT_SMALL)
+    #             elif np.sign(angle - agent_dir) == 1:
+    #                 agent_dir += 22.5
+    #                 actions.append(self.Actions.RIGHT_SMALL)
+    #         actions.append(self.Actions.FORWARD)
+    #     return actions
 
     def transition(self):
         """
@@ -100,7 +148,7 @@ class HyruleEnv(gym.GoalEnv):
         neighbors = {}
         for n in [edge[1] for edge in list(self.G.edges(self.agent_pos))]:
             neighbors[n] = self.get_angle_between_nodes(n, self.agent_pos)
-        if neighbors[min(neighbors, key=neighbors.get)] > 60:
+        if neighbors[min(neighbors, key=neighbors.get)] > 45:
             return # noop
         self.agent_pos = min(neighbors, key=neighbors.get)
 
@@ -123,12 +171,8 @@ class HyruleEnv(gym.GoalEnv):
             print("reward: " + str(reward))
         else:
             self.turn(action)
-        #print(visible_text)
-        print(self.agent_pos)
-        print(self.agent_dir)
         self.agent_gps = self.sample_gps(self.data_df.loc[self.agent_pos])
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
-        print(rel_gps)
         obs = {"image": image, "mission": self.desired_goal_num, "rel_gps": rel_gps, "visible_text": visible_text}
         return obs, reward, done, {}
 
@@ -180,31 +224,32 @@ class HyruleEnv(gym.GoalEnv):
         return (x, y)
 
     def reset(self):
-        self.agent_pos = 0 #np.random.choice(self.G.nodes)
-        self.agent_dir = 0 #random.uniform(0, 1)
-        self.desired_goal_pos, self.desired_goal_num = self.select_goal(self.difficulty)
+        self.desired_goal_pos, self.desired_goal_num = self.select_goal(2)
         self.agent_gps = self.sample_gps(self.data_df.loc[self.agent_pos])
         self.target_gps = self.sample_gps(self.data_df.loc[self.desired_goal_pos["frame"]], scale=3.0)
         image, x, w = self._get_image()
         return {"image": image, "achieved_goal": self.get_visible_text(x, w), "desired_goal_num": self.desired_goal_num}
 
-    def oracular_spectacular(self):
-        # prints the ideal way to navigate to the desired goal
-        target = self.desired_goal_pos["frame"]
-        path = nx.shortest_path(self.G, self.agent_pos, target=target["frame"])
+
+    def shortest_path_length(self, cur_node, cur_dir, target_node, target_dir):
+        # finds a minimal trajectory to navigate to the target pose
+        path = nx.shortest_path(self.G, cur_node, target=target_node)
         actions = []
-        agent_dir = self.agent_dir
         for idx, node in enumerate(path):
+
+            # if you're in the goal pano
             if idx + 1 == len(path):
-                break
-            next_node = path[idx + 1]
-            angle = self.get_angle_between_nodes(node, next_node)
-            while np.abs(angle - agent_dir) > 30:
-                if np.sign(angle - agent_dir) == -1:
-                    agent_dir -= 22.5
+                angle = target_dir
+            else:
+                angle = self.get_angle_between_nodes(node, path[idx + 1])
+
+            # Turn to make the transition
+            while np.abs(angle - cur_dir) > 22.5:
+                if np.sign(angle - cur_dir) == -1:
+                    cur_dir -= 22.5
                     actions.append(self.Actions.LEFT_SMALL)
-                elif np.sign(angle - agent_dir) == 1:
-                    agent_dir += 22.5
+                elif np.sign(angle - cur_dir) == 1:
+                    cur_dir += 22.5
                     actions.append(self.Actions.RIGHT_SMALL)
             actions.append(self.Actions.FORWARD)
         return actions
