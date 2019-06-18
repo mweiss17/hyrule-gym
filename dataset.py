@@ -1,6 +1,7 @@
 """ pre-process and write the labels, spatial graph, and lower resolution images to disk """
 from __future__ import print_function, division
 import glob
+import os
 import collections
 import xml.etree.ElementTree as et
 from tqdm import tqdm
@@ -89,6 +90,24 @@ def create_dataset(region="saint-urbain", limit=None):
         paths = paths[:limit]
 
     # do electronic stabilization and resize the images
+    gyro_path = os.getcwd() + "/data/HET_0009.CSV"
+    gyro_df = pd.read_csv(gyro_path, sep=',', header=None)
+    cols = ["frm", "xAccel", "yAccel", "zAccel", "xGyro", "yGyro", "zGyro", "xMagnet", "yMagnet", "zMagnet"]
+    data = []
+    i = 0
+    for idx, row in gyro_df.iterrows():
+        i += 1
+        row_data = {}
+        for idx2, element in row.iteritems():
+            if "=" in str(element):
+                k, v = element.split("=")
+                if k in cols:
+                    row_data[k] = float(v)
+        if len(row_data) > 1:
+            data.append(row_data)
+
+    gyro_df = pd.DataFrame(data, columns=cols)
+
     height = 126
     width = 224
     crop_margin = int(height * (1/6))

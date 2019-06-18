@@ -78,7 +78,7 @@ class HyruleEnv(gym.GoalEnv):
         angle = math.atan2(y, x) * 180 / np.pi
         return np.abs(self.norm_angle(angle - self.agent_dir))# - 67.5
 
-    def select_goal(self, difficulty=1, trajectory_curric=True):
+    def select_goal(self, difficulty=1, trajectory_curric=False):
         pos = np.random.choice([x for x, y in self.G.nodes(data=True) if len(y['goals_achieved']) > 0])
         goal_pos = self.G.nodes[pos]
         goal_num = np.random.choice(self.G.nodes[pos]["goals_achieved"])
@@ -88,12 +88,14 @@ class HyruleEnv(gym.GoalEnv):
 
         cur_pos = pos
         pano_rotation = self.norm_angle(self.G.node[cur_pos]['angle'])
-        cur_dir = label_dir - (360 * ((label["coords"].values[0][0] + label["coords"].values[0][1]) / 2) / 224) % 22.5
-        cur_dir = (self.norm_angle(cur_dir + pano_rotation) + 180)
-
+        # cur_dir = label_dir - label_dir % 22.5
+        # cur_dir = (self.norm_angle(cur_dir + pano_rotation) + 180)
+        cur_dir = self.norm_angle(label_dir)
+        # print("label_dir = " + str(label_dir))
+        # print("cur_dir = " + str(cur_dir))
         seen_poses = defaultdict(list)
         seen_poses[1].append(str(cur_pos) + " : " + str(cur_dir))
-        actions = []
+        actions = [self.Actions.DONE]
         if trajectory_curric:
             neighbor = None
             while len(actions) < difficulty:
@@ -114,10 +116,13 @@ class HyruleEnv(gym.GoalEnv):
                     actions.append(self.Actions.FORWARD)
             self.agent_pos = cur_pos
             self.agent_dir = cur_dir
+            print("self.agent_dir: " + str(self.agent_dir))
         else:
             # randomly selects a node n-transitions from the goal node
-            nodes = set(nx.ego_graph(self.G, pos, radius=difficulty))
-            if difficulty > 1:
+            if difficulty == 0:
+                nodes = [pos]
+            if difficulty >= 1:
+                nodes = set(nx.ego_graph(self.G, pos, radius=difficulty))
                 nodes -= set(nx.ego_graph(self.G, pos, radius=difficulty-1))
             self.agent_pos = self.G.nodes[np.random.choice(list(nodes))]["frame"]
         return goal_pos, goal_num
@@ -227,7 +232,7 @@ class HyruleEnv(gym.GoalEnv):
         return (x, y)
 
     def reset(self):
-        self.desired_goal_pos, self.desired_goal_num = self.select_goal(2)
+        self.desired_goal_pos, self.desired_goal_num = self.select_goal(self.difficulty)
         self.agent_gps = self.sample_gps(self.data_df.loc[self.agent_pos])
         self.target_gps = self.sample_gps(self.data_df.loc[self.desired_goal_pos["frame"]], scale=3.0)
         image, x, w = self._get_image()

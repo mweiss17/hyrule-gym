@@ -92,7 +92,6 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
             }
         If None, default key_to_action mapping for that env is used, if provided.
     """
-    env.reset()
     rendered = env.render(mode='rgb_array')
 
     if keys_to_action is None:
