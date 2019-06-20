@@ -122,7 +122,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
     while running:
         f += 1
         if time.time() - start > 1:
-            print(f)
+            # print(f)
             start = time.time()
             f = 0
         if env_done:
