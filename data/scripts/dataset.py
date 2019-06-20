@@ -9,6 +9,7 @@ import networkx as nx
 import pandas as pd
 import numpy as np
 import cv2
+from utils import find_nearby_nodes
 
 def process_labels(path):
     """ This function processes the labels into a nice format for the simulator"""
@@ -23,39 +24,37 @@ def process_labels(path):
             name = node.find("name").text
             obj_type, val = name.split("-")
             bndbox = (node.find("bndbox").find("xmin").text, node.find("bndbox").find("xmax").text, node.find("bndbox").find("ymin").text, node.find("bndbox").find("ymax").text)
-            labels.append((int(frame), obj_type, val, bndbox))
-    label_df = pd.DataFrame(labels, columns = ["frame", "obj_type", "val", "coords"])
+            labels.append((int(frame * 30), obj_type, val, bndbox))
+    label_df = pd.DataFrame(labels, columns = ["timestamp", "obj_type", "val", "coords"])
     return label_df
 
-def construct_spatial_graph(data_df, label_df, path):
+def construct_spatial_graph(coords_df, label_df, path):
     """ Filter the pano coordinates by spatial relation and write the filtered graph to disk"""
     # Init graph
     G = nx.Graph()
-    G.add_nodes_from(data_df.timestamp.values.astype(int).tolist())
+    G.add_nodes_from(data_df.index.values.astype(int).tolist())
     nodes = G.nodes
     max_node_distance = 1.5
-    for node_1 in nodes:
-        # write pano metadata to nodes
-        meta = data_df[data_df["timestamp"] == node_1]
-        coords1 = np.array([meta['x'].values[0], meta['y'].values[0], meta['z'].values[0]])
-    
-        G.nodes[node_1]['coords'] = coords1
-        G.nodes[node_1]['frame'] = meta.index.values[0]
-        G.nodes[node_1]['data_df_key'] = node_1
-        G.nodes[node_1]['angle'] = meta.angle
+    for node_1 in tqdm(nodes, desc="Adding edges to graph"):
+        print(node_1_idx)
+        meta = coords_df[coords_df.index == node_1_idx]
+        coords = np.array([meta['x'].values[0], meta['y'].values[0], meta['z'].values[0]])
+        G.nodes[node_1_idx]['coords'] = coords
+        G.nodes[node_1_idx]['timestamp'] = node_1_idx
+        G.nodes[node_1_idx]['angle'] = meta.angle
 
-        # Check the distance between the nodes
-        for node_2 in G.nodes:
-            if node_1 == node_2:
+        nearby_nodes = coords_df[(coords_df.x > coords[0] - 0.75) & (coords_df.x < coords[1] + 0.75) & (coords_df.y > coords[0] - 0.75) & (coords_df.y < coords[1] + 0.75)]
+        for node_2_idx, node_2_vals in nearby_nodes.iterrows():
+            if node_1_idx == node_2_idx:
                 continue
-            meta2 = data_df[data_df.timestamp == node_2]
+            meta2 = coords_df[coords_df.index == node_2_idx]
             coords2 = np.array([meta2['x'].values[0], meta2['y'].values[0], meta2['z'].values[0]])
-            G.nodes[node_2]['coords'] = coords2
-            node_distance = np.linalg.norm(coords1 - coords2)
+            G.nodes[node_2_idx]['coords'] = coords2
+            node_distance = np.linalg.norm(coords - coords2)
             if node_distance > max_node_distance:
                 continue
-            G.add_edge(node_1, node_2, weight=node_distance)
-    
+            G.add_edge(node_1_idx, node_2_idx, weight=node_distance)
+
     # find target panos -- they are the ones with the biggest bounding box an the house number
     goal_panos = {}
     for house_number in label_df[label_df.obj_type == "house_number"]["val"].unique():
@@ -65,7 +64,7 @@ def construct_spatial_graph(data_df, label_df, path):
         for coords in [x for x in matches['coords'].values]:
             areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
         goal_pano = matches.iloc[areas.index(max(areas))]
-        goal_panos[goal_pano["frame"]] = goal_pano
+        goal_panos[goal_pano.index] = goal_pano
 
     for node in nodes:
         G.nodes[node]['goals_achieved'] = []
@@ -99,7 +98,7 @@ def create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-data/data/
     else:
         coords = np.load(data_path + "processed/pos_ang.npy")
 
-    # Get panos and crop'em into thumbnails
+        # Get panos and crop'em into thumbnails
     for path in tqdm(paths, desc="Loading thumbnails"):
         frame = int(path.split("_")[-1].split(".")[0])
         image = cv2.imread(path)
@@ -107,9 +106,9 @@ def create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-data/data/
         image = cv2.resize(image, (width, height))[:, :, ::-1]
         image = image[crop_margin:height - crop_margin]
         thumbnails[frame] = image
-    
+
         # change label coords to mini space
-        labels = label_df[label_df["frame"] == frame]
+        labels = label_df[label_df["timestamp"] == int(frame * 30)]
         if labels.any().any():
             for idx, row in labels.iterrows():
                 row_coords = [int(x) for x in row["coords"]]
@@ -123,28 +122,15 @@ def create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-data/data/
 
     od = collections.OrderedDict(sorted(thumbnails.items()))
     coords = coords[coords[:, 0].argsort()]
-#     intersection = set(coords[:, 0]).intersection(set(od.keys()))
-
-#     to_keep = list()
-#     for idx, frame in enumerate(coords[:, 0]):
-#         if frame in intersection:
-#             to_keep.append(idx)
-#     coords = np.take(coords, to_keep, axis=0)
-
-#     to_delete = list()
-#     for key in thumbnails.keys():
-#         if key not in intersection:
-#             to_delete.append(key)
-
-#     for key in to_delete:
-#         del od[key]
 
     x = coords[:, 1]
     y = coords[:, 2]
     z = coords[:, 3]
     angle = coords[:, 4]
 
-    data_df = pd.DataFrame({"x": x, "y": y, "z": z, "angle": angle, "timestamp": coords[:, 0], "thumbnail": list(od.values())})
-    data_df.index = range(0, len(coords[:, 0]))
+    coords_df = pd.DataFrame({"x": x, "y": y, "z": z, "angle": angle, "timestamp": coords[:, 0]})
+    image_df = pd.DataFrame({"timestamp": coords[:, 0], "thumbnail": list(od.values())})
     data_df.to_hdf(data_path + "processed/data.hdf5", key="df", index=False)
     construct_spatial_graph(data_df, label_df, data_path)
+
+create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-gym/data/data/run_1/")

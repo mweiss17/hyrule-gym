@@ -45,14 +45,14 @@ class HyruleEnv(gym.GoalEnv):
 
     def __init__(self, path="/Users/martinweiss/code/academic/hyrule-gym/data/data/run_1/processed/", obs_type='image', obs_shape=(84, 84, 3)):
         self.viewer = None
-        self.curriculum_learning = False
         self._action_set = HyruleEnv.Actions
+        self.curriculum_learning = None
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
         self.data_df = pd.read_hdf(path + "data.hdf5", key='df', mode='r')
         self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
-        self.agent_loc = int(self.data_df.iloc[0].timestamp)
+        self.agent_loc =  int(self.data_df.iloc[0].timestamp) #5401
         self.agent_dir = 0
 
         self.difficulty = 1
@@ -78,7 +78,7 @@ class HyruleEnv(gym.GoalEnv):
         x = self.G.nodes[n1]['coords'][0] - self.G.nodes[n2]['coords'][0]
         y = self.G.nodes[n1]['coords'][1] - self.G.nodes[n2]['coords'][1]
         angle = math.atan2(y, x) * 180 / np.pi
-        return np.abs(self.norm_angle(angle - self.agent_dir))# - 67.5
+        return np.abs(self.norm_angle(angle - self.agent_dir))
 
     def select_goal(self, difficulty=1, trajectory_curric=False):
         pos = np.random.choice([x for x, y in self.G.nodes(data=True) if len(y['goals_achieved']) > 0])
@@ -89,7 +89,7 @@ class HyruleEnv(gym.GoalEnv):
         # we adjust for the agent direction discritization
 
         cur_pos = pos
-        pano_rotation = self.norm_angle(self.G.node[cur_pos]['angle'].values[0])
+        # pano_rotation = self.norm_angle(self.G.node[cur_pos]['angle'].values[0])
         # cur_dir = label_dir - label_dir % 22.5
         # cur_dir = (self.norm_angle(cur_dir + pano_rotation) + 180)
         cur_dir = self.norm_angle(label_dir)
@@ -159,8 +159,10 @@ class HyruleEnv(gym.GoalEnv):
         neighbors = {}
         for n in [edge[1] for edge in list(self.G.edges(self.agent_loc))]:
             neighbors[n] = self.get_angle_between_nodes(n, self.agent_loc)
+        print(neighbors)
         if neighbors[min(neighbors, key=neighbors.get)] > 45:
             return # noop
+
         self.agent_loc = min(neighbors, key=neighbors.get)
 
     def set_difficulty(self, difficulty, weighted=False):
@@ -199,7 +201,7 @@ class HyruleEnv(gym.GoalEnv):
         else:
             img = self.data_df[self.data_df.timestamp == self.agent_loc]['thumbnail'].values[0]
             obs_shape = self.observation_space.shape
-        pano_rotation = self.norm_angle(self.data_df[self.data_df.timestamp == self.agent_loc].angle.values[0])
+        pano_rotation = self.norm_angle(self.data_df[self.data_df.timestamp == self.agent_loc].angle.values[0] + 90)
         print("pano_rotation: " + str(pano_rotation))
         print("index: " + str(self.data_df[self.data_df.timestamp == self.agent_loc].index.values[0]))
         print("timestamp: " + str(self.data_df[self.data_df.timestamp == self.agent_loc].timestamp.values[0]))
@@ -207,7 +209,7 @@ class HyruleEnv(gym.GoalEnv):
         w = obs_shape[0]
         y = img.shape[0] - obs_shape[0]
         h = obs_shape[0]
-        x = int((self.norm_angle(self.agent_dir + pano_rotation) + 180)/360 * img.shape[1])
+        x = int((self.norm_angle(self.agent_dir - pano_rotation) + 180)/360 * img.shape[1])
 
         if (x + w) % img.shape[1] != (x + w):
             res_img = np.zeros(obs_shape)
