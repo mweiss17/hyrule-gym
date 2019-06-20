@@ -1,13 +1,16 @@
 """ pre-process and write the labels, spatial graph, and lower resolution images to disk """
 from __future__ import print_function, division
 import glob
+import sys
 import os
+import pickle
 import collections
 import xml.etree.ElementTree as et
 from tqdm import tqdm
 import networkx as nx
 import pandas as pd
 import numpy as np
+import h5py
 import cv2
 from utils import find_nearby_nodes
 
@@ -24,7 +27,7 @@ def process_labels(path):
             name = node.find("name").text
             obj_type, val = name.split("-")
             bndbox = (node.find("bndbox").find("xmin").text, node.find("bndbox").find("xmax").text, node.find("bndbox").find("ymin").text, node.find("bndbox").find("ymax").text)
-            labels.append((int(frame * 30), obj_type, val, bndbox))
+            labels.append((int(frame) * 30, obj_type, val, bndbox))
     label_df = pd.DataFrame(labels, columns = ["timestamp", "obj_type", "val", "coords"])
     return label_df
 
@@ -32,10 +35,10 @@ def construct_spatial_graph(coords_df, label_df, path):
     """ Filter the pano coordinates by spatial relation and write the filtered graph to disk"""
     # Init graph
     G = nx.Graph()
-    G.add_nodes_from(data_df.index.values.astype(int).tolist())
+    G.add_nodes_from(range(len(coords_df)))
     nodes = G.nodes
     max_node_distance = 1.5
-    for node_1 in tqdm(nodes, desc="Adding edges to graph"):
+    for node_1_idx in tqdm(nodes, desc="Adding edges to graph"):
         print(node_1_idx)
         meta = coords_df[coords_df.index == node_1_idx]
         coords = np.array([meta['x'].values[0], meta['y'].values[0], meta['z'].values[0]])
@@ -92,23 +95,23 @@ def create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-data/data/
     width = 224
     crop_margin = int(height * (1/6))
 
-    thumbnails = {}
+    thumbnails = np.zeros((len(paths), 84, 224, 3))
     if limit:
         coords = np.load(data_path + "processed/pos_ang.npy")[:limit]
     else:
         coords = np.load(data_path + "processed/pos_ang.npy")
 
-        # Get panos and crop'em into thumbnails
-    for path in tqdm(paths, desc="Loading thumbnails"):
+    # Get panos and crop'em into thumbnails
+    for idx, path in enumerate(tqdm(paths, desc="Loading thumbnails")):
         frame = int(path.split("_")[-1].split(".")[0])
         image = cv2.imread(path)
         shape = image.shape[0:2]
         image = cv2.resize(image, (width, height))[:, :, ::-1]
         image = image[crop_margin:height - crop_margin]
-        thumbnails[frame] = image
+        thumbnails[idx] = image
 
         # change label coords to mini space
-        labels = label_df[label_df["timestamp"] == int(frame * 30)]
+        labels = label_df[label_df["timestamp"] == int(frame)]
         if labels.any().any():
             for idx, row in labels.iterrows():
                 row_coords = [int(x) for x in row["coords"]]
@@ -120,7 +123,6 @@ def create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-data/data/
 
     label_df.to_hdf(data_path + "processed/labels.hdf5", key="df", index=False)
 
-    od = collections.OrderedDict(sorted(thumbnails.items()))
     coords = coords[coords[:, 0].argsort()]
 
     x = coords[:, 1]
@@ -129,8 +131,9 @@ def create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-data/data/
     angle = coords[:, 4]
 
     coords_df = pd.DataFrame({"x": x, "y": y, "z": z, "angle": angle, "timestamp": coords[:, 0]})
-    image_df = pd.DataFrame({"timestamp": coords[:, 0], "thumbnail": list(od.values())})
-    data_df.to_hdf(data_path + "processed/data.hdf5", key="df", index=False)
-    construct_spatial_graph(data_df, label_df, data_path)
+    f = h5py.File(data_path + "processed/images.hdf5", 'w')
+    f.create_dataset("df", data=thumbnails)
+    f.close()
+    construct_spatial_graph(coords_df, label_df, data_path)
 
-create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-gym/data/data/run_1/")
+create_dataset(data_path="/home/martin/hyrule-gym/data/2019-06-10/")
