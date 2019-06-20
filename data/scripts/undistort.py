@@ -39,14 +39,14 @@ def undistort_proc(q):
 
 
             cv2.imwrite(out_fname, undistorted_img)
-        
+
         except:
             return
 
 yaml.add_constructor(u"tag:yaml.org,2002:opencv-matrix", opencv_matrix)
 
 # loading
-with open('vuze_config/VZP1186200216.yml') as fin:
+with open('../vuze_config/VZP1186200216.yml') as fin:
     c = fin.read()
     # some operator on raw conent of c may be needed
     c = "%YAML 1.1"+os.linesep+"---" + c[len("%YAML:1.0"):] if c.startswith("%YAML:1.0") else c
