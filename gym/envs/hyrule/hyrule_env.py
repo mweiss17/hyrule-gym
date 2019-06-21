@@ -44,17 +44,17 @@ class HyruleEnv(gym.GoalEnv):
             x = 360 + x
         return x
 
-    def __init__(self, path="/Users/martinweiss/code/academic/hyrule-gym/data/data/half-corl/processed/", obs_type='image', obs_shape=(84, 84, 3)):
+    def __init__(self, path="/home/martin/hyrule-gym/data/half-corl/processed/", obs_type='image', obs_shape=(84, 84, 3)):
         self.viewer = None
         self._action_set = HyruleEnv.Actions
         self.curriculum_learning = None
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
-        self.images_df = h5py.File(path + "images.hdf5", mode='r')["df"].value
+        self.images_df = np.load(path + 'images.npy').item()
         self.coords_df = pd.read_hdf(path + "coords.hdf5", key='df', mode='r')
         self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
-        self.agent_loc = 0
+        self.agent_loc = 1760
         self.agent_dir = 0
 
         self.difficulty = 1
@@ -178,10 +178,10 @@ class HyruleEnv(gym.GoalEnv):
 
     def _get_image(self, high_res=False, plot=False):
         if high_res:
-            img = cv2.imread(filename=self.path + "/panos/pano_frame_"+ str(self.agent_loc).zfill(6) + ".png")[:, :, ::-1]
+            img = cv2.imread(filename=self.path + "/panos/pano_"+ str(self.agent_loc).zfill(6) + ".png")[:, :, ::-1]
             obs_shape = (1024, 1024, 3)
         else:
-            img = self.images_df[self.agent_loc]
+            img = self.images_df[int(self.coords_df.iloc[self.agent_loc].frame)]
             obs_shape = self.observation_space.shape
 
         pano_rotation = self.norm_angle(self.coords_df.iloc[self.agent_loc].angle + 90)

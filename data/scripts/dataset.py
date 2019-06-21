@@ -97,6 +97,8 @@ def create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-data/data/
     crop_margin = int(height * (1/6))
 
     thumbnails = np.zeros((len(paths), 84, 224, 3))
+    frames = np.zeros(len(paths))
+    
     if limit:
         coords = np.load(data_path + "processed/pos_ang.npy")[:limit]
     else:
@@ -105,6 +107,7 @@ def create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-data/data/
     # Get panos and crop'em into thumbnails
     for idx, path in enumerate(tqdm(paths, desc="Loading thumbnails")):
         frame = int(path.split("_")[-1].split(".")[0])
+        frames[idx] = frame
         image = cv2.imread(path)
         shape = image.shape[0:2]
         image = cv2.resize(image, (width, height))[:, :, ::-1]
@@ -122,12 +125,11 @@ def create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-data/data/
                               int((height - 2 * crop_margin) * row_coords[3] / shape[0]))
                 label_df.at[ix, "coords"] = new_coords
 
+    images_df = {frame: img for frame, img in zip(frames, thumbnails)}
     label_df.to_hdf(data_path + "processed/labels.hdf5", key="df", index=False)
     coords_df = pd.DataFrame({"x": coords[:, 2], "y": coords[:, 3], "z": coords[:, 4], "angle": coords[:, -1], "timestamp": coords[:, 1], "frame": [int(x) for x in coords[:, 1]*30]})
     coords_df.to_hdf(data_path + "processed/coords.hdf5", key='df')
-    f = h5py.File(data_path + "processed/images.hdf5", 'w')
-    f.create_dataset("df", data=thumbnails)
-    f.close()
+    np.save(data_path + "processed/images.npy", images_df)
     construct_spatial_graph(coords_df, label_df, data_path)
 
-create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-gym/data/data/half-corl/")
+create_dataset(data_path="/home/martin/hyrule-gym/data/half-corl/")
