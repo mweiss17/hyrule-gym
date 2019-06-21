@@ -40,7 +40,7 @@ def save_poses(filename, poses):
 
 # Filter the poses
 poses = pd.read_csv(args.coords_file, delimiter=",")
-poses.columns = header=['index', 'timestamp', 'x', 'y', 'z', 'angle']
+poses.columns = ['index', 'timestamp', 'x', 'y', 'z', 'angle']
 ROT_MAT = np.array([[0, 0, 1], [-1, 0, 0], [0, -1, 0]])
 filtered_poses = filter_poses(poses)
 save_poses(args.output_file, filtered_poses)
