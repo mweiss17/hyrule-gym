@@ -8,6 +8,7 @@ import networkx as nx
 import pandas as pd
 import numpy as np
 import cv2
+from matplotlib import pyplot as plt
 
 height = 126
 width = 224
@@ -43,13 +44,14 @@ def process_labels(path):
     label_df.to_hdf(path + "processed/labels.hdf5", key="df", index=False)
     return label_df
 
-def construct_spatial_graph(coords_df, label_df, path):
+def construct_spatial_graph(coords_df, label_df, node_blacklist, edge_blacklist, add_edges, path):
     """ Filter the pano coordinates by spatial relation and write the filtered graph to disk"""
     # Init graph
     G = nx.Graph()
-    G.add_nodes_from(range(len(coords_df)))
+    coords_df = coords_df[~coords_df.index.isin(node_blacklist)]
+    G.add_nodes_from(coords_df.index)
+
     nodes = G.nodes
-    max_node_distance = 1.5
     for node_1_idx in tqdm(nodes, desc="Adding edges to graph"):
         meta = coords_df[coords_df.index == node_1_idx]
         coords = np.array([meta['x'].values[0], meta['y'].values[0], meta['z'].values[0]])
@@ -57,7 +59,7 @@ def construct_spatial_graph(coords_df, label_df, path):
         G.nodes[node_1_idx]['timestamp'] = meta.timestamp
         G.nodes[node_1_idx]['angle'] = meta.angle
 
-        radius = 0.75
+        radius = 1.1
         nearby_nodes = coords_df[(coords_df.x > coords[0] - radius) & (coords_df.x < coords[0] + radius) & (coords_df.y > coords[1] - radius) & (coords_df.y < coords[1] + radius)]
         for node_2_idx, node_2_vals in nearby_nodes.iterrows():
             if node_1_idx == node_2_idx:
@@ -66,9 +68,13 @@ def construct_spatial_graph(coords_df, label_df, path):
             coords2 = np.array([meta2['x'].values[0], meta2['y'].values[0], meta2['z'].values[0]])
             G.nodes[node_2_idx]['coords'] = coords2
             node_distance = np.linalg.norm(coords - coords2)
-            if node_distance > max_node_distance:
-                continue
             G.add_edge(node_1_idx, node_2_idx, weight=node_distance)
+
+    for edge in edge_blacklist:
+        G.remove_edge(edge)
+
+    for n1, n2 in add_edges:
+        G.add_edge(n1, n2)
 
     # find target panos -- they are the ones with the biggest bounding box an the house number
     goal_panos = {}
@@ -135,6 +141,20 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
             coords = np.load(data_path + "processed/pos_ang.npy")
         coords_df = pd.DataFrame({"x": coords[:, 2], "y": coords[:, 3], "z": coords[:, 4], "angle": coords[:, -1], "timestamp": coords[:, 1], "frame": [int(x) for x in coords[:, 1]*30]})
         coords_df.to_hdf(data_path + "processed/coords.hdf5", key='df')
-        construct_spatial_graph(coords_df, label_df, data_path)
+        node_blacklist = [6038, 6039, 5721, 5722]
+        edge_blacklist = []
+        add_edges = []
+
+        G = construct_spatial_graph(coords_df, label_df, node_blacklist, edge_blacklist, add_edges, data_path)
+        pos = {k: v.get("coords")[0:2] for k, v in G.nodes(data=True)}
+        nx.draw_networkx(G, pos,
+                         nodelist=G.nodes,
+                         node_color='r',
+                         node_size=10,
+                         alpha=0.8,
+                         with_label=True)
+        plt.axis('equal')
+        plt.show()
+
 
 create_dataset(data_path="/data/data/corl/", do_images=False, do_labels=False, do_graph=True)
