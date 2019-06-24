@@ -114,6 +114,11 @@ def process_images(data_path, paths):
     images_df = {frame: img for frame, img in zip(frames, thumbnails)}
     np.savez_compressed(data_path + "processed/images.npz", images_df)
 
+def construct_graph_cleanup():
+    node_blacklist = [6038, 6039, 5721, 5722, 5742, 5741, 5740, 5739, 5738, 5737, 5736, 5735, 5734, 5733, 5732, 5731, 5730, 5729, 5728, 5727, 5726,]
+    edge_blacklist = []
+    add_edges = [(6161, 6162), (6147, 6146)]
+
 
 def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True, do_graph=True, limit=None):
     """
@@ -141,9 +146,7 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
             coords = np.load(data_path + "processed/pos_ang.npy")
         coords_df = pd.DataFrame({"x": coords[:, 2], "y": coords[:, 3], "z": coords[:, 4], "angle": coords[:, -1], "timestamp": coords[:, 1], "frame": [int(x) for x in coords[:, 1]*30]})
         coords_df.to_hdf(data_path + "processed/coords.hdf5", key='df')
-        node_blacklist = [6038, 6039, 5721, 5722]
-        edge_blacklist = []
-        add_edges = []
+        node_blacklist, edge_blacklist, add_edges = construct_graph_cleanup()
 
         G = construct_spatial_graph(coords_df, label_df, node_blacklist, edge_blacklist, add_edges, data_path)
         pos = {k: v.get("coords")[0:2] for k, v in G.nodes(data=True)}
