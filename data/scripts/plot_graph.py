@@ -14,7 +14,7 @@ args = parser.parse_args()
 print("Path : " + args.input_path)
 input_path = args.input_path
 
-G = nx.read_gpickle(input_path) 
+G = nx.read_gpickle(input_path)
 pos = {k: v.get("coords")[0:2] for k, v in G.nodes(data=True)}
 
 # nx.draw_networkx_nodes(G, pos,
@@ -39,12 +39,12 @@ pos = {k: v.get("coords")[0:2] for k, v in G.nodes(data=True)}
 #                        alpha=0.8)
 # edges = nx.draw_networkx_edges(G, pos=pos)
 
-nx.draw_networkx(G, pos,
-                 nodelist=G.nodes,
-                 node_color='r',
-                 node_size=10,
-                 alpha=0.8,
-                 with_label=True)
-
+# nx.draw_networkx(G, pos,
+#                  nodelist=G.nodes,
+#                  node_color='r',
+#                  node_size=10,
+#                  alpha=0.8,
+#                  with_label=True)
+nx.draw(G, pos,node_color='r', node_size=1)
 plt.axis('equal')
 plt.show()

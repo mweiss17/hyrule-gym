@@ -1,18 +1,18 @@
 """ pre-process and write the labels, spatial graph, and lower resolution images to disk """
 from __future__ import print_function, division
 import glob
-import sys
 import os
-import pickle
-import collections
 import xml.etree.ElementTree as et
 from tqdm import tqdm
 import networkx as nx
 import pandas as pd
 import numpy as np
-import h5py
 import cv2
-from utils import find_nearby_nodes
+
+height = 126
+width = 224
+shape = (3840, 2160)
+crop_margin = int(height * (1/6))
 
 def process_labels(path):
     """ This function processes the labels into a nice format for the simulator"""
@@ -29,6 +29,18 @@ def process_labels(path):
             bndbox = (node.find("bndbox").find("xmin").text, node.find("bndbox").find("xmax").text, node.find("bndbox").find("ymin").text, node.find("bndbox").find("ymax").text)
             labels.append((frame, obj_type, val, bndbox))
     label_df = pd.DataFrame(labels, columns = ["frame", "obj_type", "val", "coords"])
+    # change label coords to mini space
+    labels = label_df[label_df["frame"] == int(frame)]
+
+    if labels.any().any():
+        for ix, row in labels.iterrows():
+            row_coords = [int(x) for x in row["coords"]]
+            new_coords = (int(width * row_coords[0] / shape[1]),
+                          int(width * row_coords[1] / shape[1]),
+                          int((height - 2 * crop_margin) * row_coords[2] / shape[0]),
+                          int((height - 2 * crop_margin) * row_coords[3] / shape[0]))
+            label_df.at[ix, "coords"] = new_coords
+    label_df.to_hdf(path + "processed/labels.hdf5", key="df", index=False)
     return label_df
 
 def construct_spatial_graph(coords_df, label_df, path):
@@ -39,14 +51,14 @@ def construct_spatial_graph(coords_df, label_df, path):
     nodes = G.nodes
     max_node_distance = 1.5
     for node_1_idx in tqdm(nodes, desc="Adding edges to graph"):
-        print(node_1_idx)
         meta = coords_df[coords_df.index == node_1_idx]
         coords = np.array([meta['x'].values[0], meta['y'].values[0], meta['z'].values[0]])
         G.nodes[node_1_idx]['coords'] = coords
         G.nodes[node_1_idx]['timestamp'] = meta.timestamp
         G.nodes[node_1_idx]['angle'] = meta.angle
 
-        nearby_nodes = coords_df[(coords_df.x > coords[0] - 0.75) & (coords_df.x < coords[1] + 0.75) & (coords_df.y > coords[0] - 0.75) & (coords_df.y < coords[1] + 0.75)]
+        radius = 0.75
+        nearby_nodes = coords_df[(coords_df.x > coords[0] - radius) & (coords_df.x < coords[0] + radius) & (coords_df.y > coords[1] - radius) & (coords_df.y < coords[1] + radius)]
         for node_2_idx, node_2_vals in nearby_nodes.iterrows():
             if node_1_idx == node_2_idx:
                 continue
@@ -80,56 +92,49 @@ def construct_spatial_graph(coords_df, label_df, path):
     nx.write_gpickle(G, path + "processed/graph.pkl")
     return G
 
-def create_dataset(data_path="/Users/martinweiss/code/academic/hyrule-data/data/run_1/", limit=None):
-    """
-    Loads in the pano images from disk, crops them, resizes them, and writes them to disk.
-    Then pre-processes the pose data associated with the image and calls the fn to create the graph and to process the labels
-    """
-    label_df = process_labels(data_path)
-
-    #get png names and apply limit
-    paths = glob.glob(data_path + "panos/*.jpg")
-    if limit:
-        paths = paths[:limit]
-
-    height = 126
-    width = 224
-    crop_margin = int(height * (1/6))
-
+def process_images(data_path, paths):
     thumbnails = np.zeros((len(paths), 84, 224, 3))
     frames = np.zeros(len(paths))
-    
-    if limit:
-        coords = np.load(data_path + "processed/pos_ang.npy")[:limit]
-    else:
-        coords = np.load(data_path + "processed/pos_ang.npy")
 
     # Get panos and crop'em into thumbnails
     for idx, path in enumerate(tqdm(paths, desc="Loading thumbnails")):
         frame = int(path.split("_")[-1].split(".")[0])
         frames[idx] = frame
         image = cv2.imread(path)
-        shape = image.shape[0:2]
         image = cv2.resize(image, (width, height))[:, :, ::-1]
         image = image[crop_margin:height - crop_margin]
         thumbnails[idx] = image
 
-        # change label coords to mini space
-        labels = label_df[label_df["frame"] == int(frame)]
-        if labels.any().any():
-            for ix, row in labels.iterrows():
-                row_coords = [int(x) for x in row["coords"]]
-                new_coords = (int(width * row_coords[0] / shape[1]),
-                              int(width * row_coords[1] / shape[1]),
-                              int((height - 2 * crop_margin) * row_coords[2] / shape[0]),
-                              int((height - 2 * crop_margin) * row_coords[3] / shape[0]))
-                label_df.at[ix, "coords"] = new_coords
-
     images_df = {frame: img for frame, img in zip(frames, thumbnails)}
-    label_df.to_hdf(data_path + "processed/labels.hdf5", key="df", index=False)
-    coords_df = pd.DataFrame({"x": coords[:, 2], "y": coords[:, 3], "z": coords[:, 4], "angle": coords[:, -1], "timestamp": coords[:, 1], "frame": [int(x) for x in coords[:, 1]*30]})
-    coords_df.to_hdf(data_path + "processed/coords.hdf5", key='df')
-    np.save(data_path + "processed/images.npy", images_df)
-    construct_spatial_graph(coords_df, label_df, data_path)
+    np.savez_compressed(data_path + "processed/images.npz", images_df)
 
-create_dataset(data_path="/home/martin/hyrule-gym/data/half-corl/")
+
+def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True, do_graph=True, limit=None):
+    """
+    Loads in the pano images from disk, crops them, resizes them, and writes them to disk.
+    Then pre-processes the pose data associated with the image and calls the fn to create the graph and to process the labels
+    """
+    data_path = os.getcwd() + data_path
+    #get png names and apply limit
+    paths = glob.glob(data_path + "panos/*.png")
+    if limit:
+        paths = paths[:limit]
+
+    if do_images:
+        process_images(data_path, paths)
+
+    if do_labels:
+        label_df = process_labels(data_path)
+    else:
+        label_df = pd.read_hdf(data_path + "processed/labels.hdf5", key="df", index=False)
+
+    if do_graph:
+        if limit:
+            coords = np.load(data_path + "processed/pos_ang.npy")[:limit]
+        else:
+            coords = np.load(data_path + "processed/pos_ang.npy")
+        coords_df = pd.DataFrame({"x": coords[:, 2], "y": coords[:, 3], "z": coords[:, 4], "angle": coords[:, -1], "timestamp": coords[:, 1], "frame": [int(x) for x in coords[:, 1]*30]})
+        coords_df.to_hdf(data_path + "processed/coords.hdf5", key='df')
+        construct_spatial_graph(coords_df, label_df, data_path)
+
+create_dataset(data_path="/data/data/corl/", do_images=False, do_labels=False, do_graph=True)

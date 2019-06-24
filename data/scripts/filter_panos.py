@@ -19,8 +19,8 @@ from tqdm import tqdm
 parser = argparse.ArgumentParser(description='Filter some coords.')
 parser.add_argument('--coords_file', type=str, help='a file containing the coords')
 parser.add_argument('--output_file', type=str, help='a file where we write the "pos_ang" numpy array')
-parser.add_argument('--pano_src', type=str, default="/Volumes/Arnold2/panos/2019-06-10", help='source location for panos')
-parser.add_argument('--pano_dst', type=str, default="/Users/martinweiss/code/academic/hyrule-gym/data/data/run_1/panos2/", help='dest location for panos')
+parser.add_argument('--pano_src', type=str, default="/Volumes/Martin Weiss\'s External Drive/corl/panos", help='source location for panos')
+parser.add_argument('--pano_dst', type=str, default="/Users/martinweiss/code/academic/hyrule-gym/data/data/corl/panos/", help='dest location for panos')
 args = parser.parse_args()
 
 
@@ -67,6 +67,6 @@ for path in paths:
         if num in path:
             good_paths.append(path)
 
-os.mkdir(args.pano_dst)
+# os.mkdir(args.pano_dst)
 for path in tqdm(good_paths, total=len(good_paths)):
     copyfile(path, args.pano_dst + path.split("/")[-1])

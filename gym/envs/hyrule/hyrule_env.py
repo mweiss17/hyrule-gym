@@ -2,6 +2,7 @@
 from __future__ import print_function, division
 import enum
 import math
+import os
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -44,13 +45,16 @@ class HyruleEnv(gym.GoalEnv):
             x = 360 + x
         return x
 
-    def __init__(self, path="/home/martin/hyrule-gym/data/half-corl/processed/", obs_type='image', obs_shape=(84, 84, 3)):
+    def __init__(self, path="/data/data/corl/processed/", obs_type='image', obs_shape=(84, 84, 3)):
         self.viewer = None
         self._action_set = HyruleEnv.Actions
         self.curriculum_learning = None
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
+        path = os.getcwd() + path
         self.images_df = np.load(path + 'images.npy').item()
+        import pdb; pdb.set_trace()
+
         self.coords_df = pd.read_hdf(path + "coords.hdf5", key='df', mode='r')
         self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
