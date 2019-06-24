@@ -116,9 +116,9 @@ def process_images(data_path, paths):
 
 def construct_graph_cleanup():
     node_blacklist = [6038, 6039, 5721, 5722]
-    node_blacklist.append(range(5724, 5748))
+    node_blacklist.extend(*[x for x in range(5724, 5748)])
     edge_blacklist = []
-    add_edges = [(6161, 6162), (6147, 6146)]
+    add_edges = [(6161, 6162), (6147, 6146), (6172, 6173), (6174, 6175)]
     return node_blacklist, edge_blacklist, add_edges
 
 def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True, do_graph=True, limit=None):
