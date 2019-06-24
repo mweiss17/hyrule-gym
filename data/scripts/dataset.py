@@ -115,10 +115,11 @@ def process_images(data_path, paths):
     np.savez_compressed(data_path + "processed/images.npz", images_df)
 
 def construct_graph_cleanup():
-    node_blacklist = [6038, 6039, 5721, 5722, 5742, 5741, 5740, 5739, 5738, 5737, 5736, 5735, 5734, 5733, 5732, 5731, 5730, 5729, 5728, 5727, 5726,]
+    node_blacklist = [6038, 6039, 5721, 5722]
+    node_blacklist.append(range(5724, 5748))
     edge_blacklist = []
     add_edges = [(6161, 6162), (6147, 6146)]
-
+    return node_blacklist, edge_blacklist, add_edges
 
 def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True, do_graph=True, limit=None):
     """
