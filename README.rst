@@ -1,3 +1,6 @@
+.. contents:: **Contents of this document**
+   :depth: 2
+
 
 Hyrule-Gym
 **********
@@ -49,9 +52,6 @@ A whitepaper for OpenAI Gym is available at http://arxiv.org/abs/1606.01540, and
     Year = {2016},
     Eprint = {arXiv:1606.01540},
   }
-
-.. contents:: **Contents of this document**
-   :depth: 2
 
 Basics
 ======
