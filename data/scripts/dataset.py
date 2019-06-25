@@ -8,6 +8,7 @@ import networkx as nx
 import pandas as pd
 import numpy as np
 import cv2
+import gzip
 from matplotlib import pyplot as plt
 
 height = 126
@@ -70,8 +71,8 @@ def construct_spatial_graph(coords_df, label_df, node_blacklist, edge_blacklist,
             node_distance = np.linalg.norm(coords - coords2)
             G.add_edge(node_1_idx, node_2_idx, weight=node_distance)
 
-    for edge in edge_blacklist:
-        G.remove_edge(edge)
+    for n1, n2 in edge_blacklist:
+        G.remove_edge(n1, n2)
 
     for n1, n2 in add_edges:
         G.add_edge(n1, n2)
@@ -112,13 +113,61 @@ def process_images(data_path, paths):
         thumbnails[idx] = image
 
     images_df = {frame: img for frame, img in zip(frames, thumbnails)}
-    np.savez_compressed(data_path + "processed/images.npz", images_df)
+    f = gzip.GzipFile(data_path + "processed/images.npy.gz", "w")
+    np.save(file=f, arr=images_df)
+    f.close()
 
 def construct_graph_cleanup():
-    node_blacklist = [6038, 6039, 5721, 5722]
-    node_blacklist.extend(*[x for x in range(5724, 5748)])
-    edge_blacklist = []
-    add_edges = [(6161, 6162), (6147, 6146), (6172, 6173), (6174, 6175)]
+    node_blacklist = [928, 929, 930, 931, 1138, 6038, 6039, 5721, 5722, 6091, 6090, 6039, \
+                      6082, 6197, 6039, 6088, 4809, 5964, 5504, 5505, 5467, 5514, 174,    \
+                      188, 189, 190, 2390, 2391, 2392, 2393, 1862, 1863, 1512, 1821, 4227,\
+                      1874, 3894, 3895, 3896, 3897, 3898]
+    node_blacklist.extend([x for x in range(1330, 1346)])
+    node_blacklist.extend([x for x in range(3034, 3071)])
+    node_blacklist.extend([x for x in range(879, 892)])
+    node_blacklist.extend([x for x in range(2971, 2983)])
+    node_blacklist.extend([x for x in range(2888, 2948)])
+    node_blacklist.extend([x for x in range(2608, 2629)])
+    node_blacklist.extend([x for x in range(3091, 3098)])
+    node_blacklist.extend([x for x in range(704, 780)])
+    node_blacklist.extend([x for x in range(118,128)])
+    node_blacklist.extend([x for x in range(5724, 5748)])
+    node_blacklist.extend([x for x in range(6186, 6197)])
+    node_blacklist.extend([x for x in range(4891, 4896)])
+    node_blacklist.extend([x for x in range(6083, 6088)])
+    node_blacklist.extend([x for x in range(5516, 5600)])
+    node_blacklist.extend([x for x in range(5955, 5964)])
+    node_blacklist.extend([x for x in range(5459, 5467)])
+    node_blacklist.extend([x for x in range(3400, 3418)])
+    node_blacklist.extend([x for x in range(4261, 4266)])
+    node_blacklist.extend([x for x in range(5506, 5514)])
+    node_blacklist.extend([x for x in range(3876, 3894)])
+    node_blacklist.extend([x for x in range(5340, 5358)])
+    node_blacklist.extend([x for x in range(1122, 1132)])
+    node_blacklist.extend([x for x in range(652, 704)])
+    node_blacklist.extend([x for x in range(3899, 4227)])
+    node_blacklist.extend([x for x in range(2394, 2410)])
+    node_blacklist.extend([x for x in range(585, 608)])
+    node_blacklist.extend([x for x in range(2045, 2057)])
+    node_blacklist.extend([x for x in range(2244, 2252)])
+    node_blacklist.extend([x for x in range(2847, 2887)])
+    node_blacklist.extend([x for x in range(3636, 3652)])
+    node_blacklist.extend([x for x in range(2834, 2847)])
+    node_blacklist.extend([x for x in range(3652, 3661)])
+    node_blacklist.extend([x for x in range(4228, 4261)])
+    node_blacklist.extend([x for x in range(3251, 3257)])
+    node_blacklist.extend([x for x in range(3229, 3237)])
+    node_blacklist.extend([x for x in range(1835, 1843)])
+    node_blacklist.extend([x for x in range(5102, 5113)])
+    edge_blacklist = [(913, 915), (835, 925), (824, 826), (835, 837), (900, 902), (901, 903),        \
+                      (1534, 1536), (1511, 1724)]
+    add_edges = [(902,1329), (893, 894), (894, 895), (651, 2970), (638, 2983), (637, 2983), 		 \
+                 (2637, 3098), (2629, 3090), (2954, 3026), (3077, 3078), (3109, 3110), (2948, 2607), \
+                 (0, 1722), (6161, 6162), (6147, 6146), (6172, 6173), (6174, 6175), (4465, 4906),    \
+                 (6212, 6213), (4465, 4464), (4467, 4466), (6037, 5600), (5458, 3418), (5129, 5128), \
+                 (100, 101), (98, 1348), (99, 1348), (3630, 3631), (3631, 3632), (3632, 3633),       \
+                 (3634, 3635), (2375, 3661), (1834, 2234), (1834, 2233), (3366, 3367)]
+
     return node_blacklist, edge_blacklist, add_edges
 
 def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True, do_graph=True, limit=None):
