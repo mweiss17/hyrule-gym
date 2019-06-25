@@ -63,7 +63,7 @@ def process_labels(paths, G, coords):
         frame = int(G.nodes[node]['timestamp'].values[0] * 30)
         if frame in goal_panos.keys():
             G.nodes[node]['goals_achieved'].append(int(goal_panos[frame]["val"]))
-  
+
     return label_df, G
 
 def construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges, path, mini_corl=False):
@@ -103,7 +103,6 @@ def construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges
         if n1 in G.nodes and n2 in G.nodes:
             G.add_edge(n1, n2)
 
-
     return G, coords_df
 
 def process_images(paths):
@@ -120,7 +119,6 @@ def process_images(paths):
         thumbnails[idx] = image
 
     images = {frame: img for frame, img in zip(frames, thumbnails)}
-    
     return images
 
 def construct_graph_cleanup(mini_corl=False):
@@ -211,10 +209,10 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
         plt.axis('equal')
         plt.show()
         nx.write_gpickle(G, data_path + "processed/graph.pkl")
-    
+
     else:
         coords_df = pd.read_hdf(data_path + "processed/coords.hdf5", key="df", index=False)
-        G = nx.read_gpickle(path + "processed/graph.pkl")
+        G = nx.read_gpickle(data_path + "processed/graph.pkl")
 
     # Get png names and apply limit
     img_paths = [data_path + "panos/pano_" + str(frame).zfill(6) + ".png" for frame in coords_df["frame"].tolist()]
@@ -233,7 +231,7 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
         label_df, G = process_labels(label_paths, G, coords_df.frame.values.tolist())
         label_df.to_hdf(data_path + "processed/labels.hdf5", key="df", index=False)
         nx.write_gpickle(G, data_path + "processed/graph.pkl")
-  
 
 
-create_dataset(data_path="/data/data/mini-corl/", do_images=False, do_labels=True, do_graph=True, mini_corl=True)
+
+create_dataset(data_path="/data/data/mini-corl/", do_images=True, do_labels=True, do_graph=True, mini_corl=True)

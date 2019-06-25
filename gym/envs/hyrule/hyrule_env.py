@@ -60,7 +60,7 @@ class HyruleEnv(gym.GoalEnv):
         self.coords_df = pd.read_hdf(path + "coords.hdf5", key='df', mode='r')
         self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
-        self.agent_loc = 617
+        self.agent_loc = 39
         self.agent_dir = 0
 
         self.difficulty = 1
@@ -92,7 +92,6 @@ class HyruleEnv(gym.GoalEnv):
         pos = np.random.choice([x for x, y in self.G.nodes(data=True) if len(y['goals_achieved']) > 0])
         goal_pos = self.G.nodes[pos]
         goal_num = np.random.choice(self.G.nodes[pos]["goals_achieved"])
-        import pdb; pdb.set_trace()
         label = self.label_df[(self.label_df.frame == int(goal_pos['timestamp']*30)) & (self.label_df.val == str(goal_num))]
         label_dir = 360 * ((int(label["coords"].values[0][0]) + int(label["coords"].values[0][1])) / 2) / 224
         # we adjust for the agent direction discritization
@@ -164,7 +163,7 @@ class HyruleEnv(gym.GoalEnv):
         action = self._action_set(a)
         image, x, w = self._get_image()
         visible_text = self.get_visible_text(x, w)
-
+        print(visible_text)
         if action == self.Actions.FORWARD:
             self.transition()
         elif action == self.Actions.DONE:
@@ -173,7 +172,7 @@ class HyruleEnv(gym.GoalEnv):
             #print("reward: " + str(reward))
         else:
             self.turn(action)
-        self.agent_gps = self.sample_gps(self.coords_df.iloc[self.agent_loc])
+        self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
         obs = {"image": image, "mission": self.desired_goal_num, "rel_gps": rel_gps, "visible_text": visible_text}
         self.num_steps_taken += 1
@@ -188,13 +187,13 @@ class HyruleEnv(gym.GoalEnv):
             img = cv2.imread(filename=self.path + "/panos/pano_"+ str(self.agent_loc).zfill(6) + ".png")[:, :, ::-1]
             obs_shape = (1024, 1024, 3)
         else:
-            img = self.images_df[int(self.coords_df.iloc[self.agent_loc].frame)]
+            img = self.images_df[self.coords_df.loc[self.agent_loc].frame]
             obs_shape = self.observation_space.shape
 
-        pano_rotation = self.norm_angle(self.coords_df.iloc[self.agent_loc].angle + 90)
+        pano_rotation = self.norm_angle(self.coords_df.loc[self.agent_loc].angle + 90)
         print("pano_rotation: " + str(pano_rotation))
         print("index: " + str(self.agent_loc))
-        print("timestamp: " + str(self.coords_df.iloc[self.agent_loc].timestamp))
+        print("timestamp: " + str(self.coords_df.loc[self.agent_loc].timestamp))
         print("agent_dir: " + str(self.agent_dir))
         w = obs_shape[0]
         y = img.shape[0] - obs_shape[0]
@@ -239,7 +238,7 @@ class HyruleEnv(gym.GoalEnv):
     def reset(self):
         self.num_steps_taken = 0
         self.desired_goal_pos, self.desired_goal_num = self.select_goal(self.difficulty)
-        self.agent_gps = self.sample_gps(self.coords_df.iloc[self.agent_loc])
+        self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.coords_df[self.coords_df.timestamp == self.desired_goal_pos['timestamp'].values[0]].iloc[0], scale=3.0)
         image, x, w = self._get_image()
         return {"image": image, "achieved_goal": self.get_visible_text(x, w), "desired_goal_num": self.desired_goal_num}
