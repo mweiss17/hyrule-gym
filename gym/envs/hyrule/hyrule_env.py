@@ -84,7 +84,7 @@ class HyruleEnv(gym.GoalEnv):
     def get_angle_between_nodes(self, n1, n2):
         x = self.G.nodes[n1]['coords'][0] - self.G.nodes[n2]['coords'][0]
         y = self.G.nodes[n1]['coords'][1] - self.G.nodes[n2]['coords'][1]
-        angle = math.atan2(y, x) * 180 / np.pi
+        angle = (math.atan2(y, x) * 180 / np.pi) + 180
         return np.abs(self.norm_angle(angle - self.agent_dir))
 
     def select_goal(self, difficulty=1, trajectory_curric=False):
