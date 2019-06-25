@@ -9,6 +9,7 @@ import pandas as pd
 import numpy as np
 import cv2
 import gzip
+import pickle
 from matplotlib import pyplot as plt
 
 height = 126
@@ -16,10 +17,10 @@ width = 224
 shape = (3840, 2160)
 crop_margin = int(height * (1/6))
 
-def process_labels(path):
+def process_labels(paths, G, coords):
     """ This function processes the labels into a nice format for the simulator"""
     labels = []
-    for p in glob.glob(path + "raw/labels/*.xml"):
+    for p in paths:
         xtree = et.parse(p)
         xroot = xtree.getroot()
         for node in xroot:
@@ -32,6 +33,7 @@ def process_labels(path):
             labels.append((frame, obj_type, val, bndbox))
     label_df = pd.DataFrame(labels, columns = ["frame", "obj_type", "val", "coords"])
     # change label coords to mini space
+    label_df = label_df[label_df.frame.isin(coords)]
     labels = label_df[label_df["frame"] == int(frame)]
 
     if labels.any().any():
@@ -42,15 +44,36 @@ def process_labels(path):
                           int((height - 2 * crop_margin) * row_coords[2] / shape[0]),
                           int((height - 2 * crop_margin) * row_coords[3] / shape[0]))
             label_df.at[ix, "coords"] = new_coords
-    label_df.to_hdf(path + "processed/labels.hdf5", key="df", index=False)
-    return label_df
 
-def construct_spatial_graph(coords_df, label_df, node_blacklist, edge_blacklist, add_edges, path, mini_corl=False):
+    # find target panos -- they are the ones with the biggest bounding box an the house number
+    goal_panos = {}
+    for house_number in label_df[label_df.obj_type == "house_number"]["val"].unique():
+        house_number = str(house_number)
+        matches = label_df[label_df.val == house_number]
+        areas = []
+        for coords in [x for x in matches['coords'].values]:
+            areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
+        goal_pano = matches.iloc[areas.index(max(areas))]
+        goal_panos[int(goal_pano.frame)] = goal_pano
+
+    for node in G.nodes:
+        G.nodes[node]['goals_achieved'] = []
+
+    for node in G.nodes:
+        frame = int(G.nodes[node]['timestamp'].values[0] * 30)
+        if frame in goal_panos.keys():
+            G.nodes[node]['goals_achieved'].append(int(goal_panos[frame]["val"]))
+  
+    return label_df, G
+
+def construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges, path, mini_corl=False):
     """ Filter the pano coordinates by spatial relation and write the filtered graph to disk"""
     # Init graph
     G = nx.Graph()
     coords_df = coords_df[~coords_df.index.isin(node_blacklist)]
-    label_df = label_df[label_df.frame.isin(coords_df.frame.values.tolist())]
+    if mini_corl:
+        box = (24, 76, -125, 10)
+        coords_df = coords_df[((coords_df.x > box[0]) & (coords_df.x < box[1]) & (coords_df.y > box[2]) & (coords_df.y < box[3]))]
     G.add_nodes_from(coords_df.index)
 
     nodes = G.nodes
@@ -73,42 +96,17 @@ def construct_spatial_graph(coords_df, label_df, node_blacklist, edge_blacklist,
             G.add_edge(node_1_idx, node_2_idx, weight=node_distance)
 
     for n1, n2 in edge_blacklist:
-        G.remove_edge(n1, n2)
+        if n1 in G.nodes and n2 in G.nodes:
+            G.remove_edge(n1, n2)
 
     for n1, n2 in add_edges:
         if n1 in G.nodes and n2 in G.nodes:
             G.add_edge(n1, n2)
 
-    if mini_corl:
-        box = (24, 76, -125, 10)
-        outside_box = coords_df[~((coords_df.x > box[0]) & (coords_df.x < box[1]) & (coords_df.y > box[2]) & (coords_df.y < box[3]))]
-        coords_df = coords_df[((coords_df.x > box[0]) & (coords_df.x < box[1]) & (coords_df.y > box[2]) & (coords_df.y < box[3]))]
-        for i in outside_box.index:
-            G.remove_node(i)
 
-    # find target panos -- they are the ones with the biggest bounding box an the house number
-    goal_panos = {}
-    for house_number in label_df[label_df.obj_type == "house_number"]["val"].unique():
-        house_number = str(house_number)
-        matches = label_df[label_df.val == house_number]
-        areas = []
-        for coords in [x for x in matches['coords'].values]:
-            areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
-        goal_pano = matches.iloc[areas.index(max(areas))]
-        goal_panos[int(goal_pano.frame)] = goal_pano
+    return G, coords_df
 
-    for node in nodes:
-        G.nodes[node]['goals_achieved'] = []
-
-    for node in nodes:
-        frame = int(G.nodes[node]['timestamp'].values[0] * 30)
-        if frame in goal_panos.keys():
-            G.nodes[node]['goals_achieved'].append(int(goal_panos[frame]["val"]))
-
-    nx.write_gpickle(G, path + "processed/graph.pkl")
-    return G
-
-def process_images(data_path, paths):
+def process_images(paths):
     thumbnails = np.zeros((len(paths), 84, 224, 3))
     frames = np.zeros(len(paths))
 
@@ -121,10 +119,9 @@ def process_images(data_path, paths):
         image = image[crop_margin:height - crop_margin]
         thumbnails[idx] = image
 
-    images_df = {frame: img for frame, img in zip(frames, thumbnails)}
-    f = gzip.GzipFile(data_path + "processed/images.npy.gz", "w")
-    np.save(file=f, arr=images_df)
-    f.close()
+    images = {frame: img for frame, img in zip(frames, thumbnails)}
+    
+    return images
 
 def construct_graph_cleanup(mini_corl=False):
     node_blacklist = [928, 929, 930, 931, 1138, 6038, 6039, 5721, 5722, 6091, 6090, 6039, \
@@ -193,18 +190,6 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
     Then pre-processes the pose data associated with the image and calls the fn to create the graph and to process the labels
     """
     data_path = os.getcwd() + data_path
-    #get png names and apply limit
-    paths = glob.glob(data_path + "panos/*.png")
-    if limit:
-        paths = paths[:limit]
-
-    if do_images:
-        process_images(data_path, paths)
-
-    if do_labels:
-        label_df = process_labels(data_path)
-    else:
-        label_df = pd.read_hdf(data_path + "processed/labels.hdf5", key="df", index=False)
 
     if do_graph:
         if limit:
@@ -212,10 +197,10 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
         else:
             coords = np.load(data_path + "processed/pos_ang.npy")
         coords_df = pd.DataFrame({"x": coords[:, 2], "y": coords[:, 3], "z": coords[:, 4], "angle": coords[:, -1], "timestamp": coords[:, 1], "frame": [int(x) for x in coords[:, 1]*30]})
-        coords_df.to_hdf(data_path + "processed/coords.hdf5", key='df')
         node_blacklist, edge_blacklist, add_edges = construct_graph_cleanup(mini_corl)
 
-        G = construct_spatial_graph(coords_df, label_df, node_blacklist, edge_blacklist, add_edges, data_path, mini_corl)
+        G, coords_df = construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges, data_path, mini_corl)
+        coords_df.to_hdf(data_path + "processed/coords.hdf5", key='df')
         pos = {k: v.get("coords")[0:2] for k, v in G.nodes(data=True)}
         nx.draw_networkx(G, pos,
                          nodelist=G.nodes,
@@ -225,6 +210,30 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
                          with_label=True)
         plt.axis('equal')
         plt.show()
+        nx.write_gpickle(G, data_path + "processed/graph.pkl")
+    
+    else:
+        coords_df = pd.read_hdf(data_path + "processed/coords.hdf5", key="df", index=False)
+        G = nx.read_gpickle(path + "processed/graph.pkl")
+
+    # Get png names and apply limit
+    img_paths = [data_path + "panos/pano_" + str(frame).zfill(6) + ".png" for frame in coords_df["frame"].tolist()]
+    if limit:
+        img_paths = img_paths[:limit]
+
+    if do_images:
+        images = process_images(img_paths)
+        f = gzip.GzipFile(data_path + "processed/images.pkl.gz", "w")
+        pickle.dump(images,f)
+        f.close()
+
+    if do_labels:
+        label_paths = [data_path + "raw/labels/pano_" + str(frame).zfill(6) + ".xml" for frame in coords_df["frame"].tolist()]
+        label_paths = [path for path in label_paths if os.path.isfile(path)]
+        label_df, G = process_labels(label_paths, G, coords_df.frame.values.tolist())
+        label_df.to_hdf(data_path + "processed/labels.hdf5", key="df", index=False)
+        nx.write_gpickle(G, data_path + "processed/graph.pkl")
+  
 
 
-create_dataset(data_path="/data/data/corl/", do_images=False, do_labels=False, do_graph=True, mini_corl=True)
+create_dataset(data_path="/data/data/mini-corl/", do_images=False, do_labels=True, do_graph=True, mini_corl=True)

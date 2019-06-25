@@ -10,8 +10,10 @@ from collections import defaultdict
 from matplotlib import pyplot as plt
 import cv2
 import gym
+import gzip
 from gym import spaces
 import h5py
+import pickle
 
 
 ACTION_MEANING = {
@@ -45,20 +47,20 @@ class HyruleEnv(gym.GoalEnv):
             x = 360 + x
         return x
 
-    def __init__(self, path="/data/data/corl/processed/", obs_type='image', obs_shape=(84, 84, 3)):
+    def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3)):
         self.viewer = None
         self._action_set = HyruleEnv.Actions
         self.curriculum_learning = None
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
         path = os.getcwd() + path
-        self.images_df = np.load(path + 'images.npy').item()
-        import pdb; pdb.set_trace()
-
+        f = gzip.GzipFile(path + "images.pkl.gz", "r")
+        self.images_df = pickle.load(f)
+        f.close()
         self.coords_df = pd.read_hdf(path + "coords.hdf5", key='df', mode='r')
         self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
-        self.agent_loc = 1760
+        self.agent_loc = 617
         self.agent_dir = 0
 
         self.difficulty = 1
@@ -90,7 +92,8 @@ class HyruleEnv(gym.GoalEnv):
         pos = np.random.choice([x for x, y in self.G.nodes(data=True) if len(y['goals_achieved']) > 0])
         goal_pos = self.G.nodes[pos]
         goal_num = np.random.choice(self.G.nodes[pos]["goals_achieved"])
-        label = self.label_df[(self.label_df.frame == str(int(self.coords_df.iloc[pos].frame)).zfill(6)) & (self.label_df.val == str(goal_num))]
+        import pdb; pdb.set_trace()
+        label = self.label_df[(self.label_df.frame == int(goal_pos['timestamp']*30)) & (self.label_df.val == str(goal_num))]
         label_dir = 360 * ((int(label["coords"].values[0][0]) + int(label["coords"].values[0][1])) / 2) / 224
         # we adjust for the agent direction discritization
 
