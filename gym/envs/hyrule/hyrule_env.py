@@ -60,9 +60,8 @@ class HyruleEnv(gym.GoalEnv):
         self.coords_df = pd.read_hdf(path + "coords.hdf5", key='df', mode='r')
         self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
-        self.agent_loc = 39
+        self.agent_loc = 51
         self.agent_dir = 0
-
         self.difficulty = 1
         self.weighted = True
 
@@ -72,13 +71,13 @@ class HyruleEnv(gym.GoalEnv):
     def turn(self, action):
         action = self._action_set(action)
         if action == self.Actions.LEFT_BIG:
-            self.agent_dir -= 67.5
-        if action == self.Actions.LEFT_SMALL:
-            self.agent_dir -= 22.5
-        if action == self.Actions.RIGHT_SMALL:
-            self.agent_dir += 22.5
-        if action == self.Actions.RIGHT_BIG:
             self.agent_dir += 67.5
+        if action == self.Actions.LEFT_SMALL:
+            self.agent_dir += 22.5
+        if action == self.Actions.RIGHT_SMALL:
+            self.agent_dir -= 22.5
+        if action == self.Actions.RIGHT_BIG:
+            self.agent_dir -= 67.5
         self.agent_dir = self.norm_angle(self.agent_dir)
 
 
@@ -198,7 +197,7 @@ class HyruleEnv(gym.GoalEnv):
         w = obs_shape[0]
         y = img.shape[0] - obs_shape[0]
         h = obs_shape[0]
-        x = int((self.norm_angle(self.agent_dir - pano_rotation) + 180)/360 * img.shape[1])
+        x = int((self.norm_angle(-self.agent_dir + pano_rotation) + 180)/360 * img.shape[1])
 
         if (x + w) % img.shape[1] != (x + w):
             res_img = np.zeros(obs_shape)
