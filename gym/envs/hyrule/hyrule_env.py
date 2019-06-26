@@ -62,7 +62,7 @@ class HyruleEnv(gym.GoalEnv):
         self.G = nx.read_gpickle(path + "graph.pkl")
         self.agent_loc = 2331 #np.random.choice(self.coords_df.index)
         self.agent_dir = 0
-        self.difficulty = 1
+        self.difficulty = 0
         self.weighted = True
 
         self.max_num_steps = 10000
@@ -134,7 +134,7 @@ class HyruleEnv(gym.GoalEnv):
                 nodes = set(nx.ego_graph(self.G, pos, radius=difficulty))
                 nodes -= set(nx.ego_graph(self.G, pos, radius=difficulty-1))
             if self.curriculum_learning:
-                self.agent_loc = pos #self.G.nodes[np.random.choice(list(nodes))]
+                self.agent_loc = np.random.choice(list(nodes))
         return goal_pos, goal_num
 
 
@@ -221,7 +221,6 @@ class HyruleEnv(gym.GoalEnv):
     def get_visible_text(self, x, w):
         visible_text = {"house_numbers": [], "street_signs": []}
         pano_labels = self.label_df[self.label_df.frame == int(self.G.nodes[self.agent_loc]['timestamp'] * 30)]
-        # import pdb; pdb.set_trace()
         if not pano_labels.any().any():
             return visible_text
 
