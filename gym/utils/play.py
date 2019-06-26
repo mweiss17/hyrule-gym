@@ -161,7 +161,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
             elif event.type == VIDEORESIZE:
                 video_size = event.size
                 screen = pygame.display.set_mode(video_size)
-                print(video_size)
+                #print(video_size)
 
         pygame.display.flip()
         clock.tick(fps)

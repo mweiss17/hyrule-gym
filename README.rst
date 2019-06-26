@@ -1,30 +1,20 @@
+.. contents:: **Contents of this document**
+   :depth: 2
+
 
 Hyrule-Gym
 **********
 
-Hyrule-gym is an environment built on the OpenAI gym toolkit. After cloning the repo and installing any necessary software (it should all be pip installable...), simply run `python gym/utils/play.py` to view the agent running around
+Hyrule-gym is an environment built on the OpenAI gym toolkit. After cloning the repo and installing any necessary software, simply run `python gym/utils/play.py`. This will pop open a pygame terminal where you can drive an agent around the corl-mini urban dataset. The dataset is located in `data/data/corl-mini/`.
 
-![Alt Text](data/going_to_element.gif)
-
+The controls to drive your agent are :`a` for hard left turn, `s` for small left turn, `d` for forward transition, `f` for small right turn, and `spacebar` for hard right turn.
 
 Prerequisites to construct your own environment from 360 video:
 
-- Install Colmap: https://colmap.github.io/install.html
+- Install OrbSlam
 
-- Install Hugin Panorama http://hugin.sourceforge.net/
+- Install VuzeVR Studio
 
-Instructions:
-
-1. Place the vuze 360 deg video under ``data/[project_folder]/raw/video/``. Create pngs from this video using the script mp4_to_png.sh. Command: ``./scripts/mp4_to_png.sh [folder_name] [video_name] [fps]`` ex: ``./scripts/mp4_to_png.sh saint-urbain HET_0009.MP4 0.3``
-
-2. Crop and rotate the images using the script crop.py. Images will be stored in folder ``data/[project_folder]/raw/pngs``. Command: ``python scripts/crop.py [project_folder]`` ex: ``python scripts/crop.py saint-urbain``
-
-3. Stitch panoramas using the script stitch_panos.py. Panoramas will be stored in folder ``data/[project_folder]/processed/panoramas``. Command: ``python scripts/stitch_panos.py [project_folder]`` ex: ``python scripts/stitch_panos.py saint-urbain``
-
-4. Run colmap's reconstruction using the cropped images. This will output a sparse reconstruction and a dense reconstruction. The parameter ``--SiftMatching.max_num_matches [arg]`` can be modified in the script if needed to limit the number of features, depending on your machine's capacities. Command : ``./scripts/colmap.sh [project_folder]`` ex: ``./scripts/colmap.sh saint-urbain``
-
-5. Once the colmap reconstruction is finished, open the ui using the command: ``colmap gui``. Then, go to ``file > import model`` and visualize each iteration of the reconstruction (0, 1, 2, ..), which will all be in the folder ``data/[project_folder]/colmap/sparse``. Choose the best reconstruction and use it to extract the camera's positions. Command: ``python scripts/extract_pos.py [project_folder] [reconstruction] [plot_positions=0]`` ex: ``python scripts/extract_pos.py saint-urbain 2``
-**Status:** Maintenance (expect bug fixes and minor updates)
 
 OpenAI Gym
 **********
@@ -49,9 +39,6 @@ A whitepaper for OpenAI Gym is available at http://arxiv.org/abs/1606.01540, and
     Year = {2016},
     Eprint = {arXiv:1606.01540},
   }
-
-.. contents:: **Contents of this document**
-   :depth: 2
 
 Basics
 ======
