@@ -47,10 +47,24 @@ class HyruleEnv(gym.GoalEnv):
             x = 360 + x
         return x
 
+    @classmethod
+    def convert_house_numbers(cls, num):
+        res = np.zeros((10, 5))
+        for col, row in enumerate(str(num)):
+            res[int(row), col] = 1
+        return res
+
+    @classmethod
+    def convert_street_sign(self, street_name):
+        num_unique_street_names = self.label_df[self.label_df.obj_type == 'street_sign'].val.unique().size
+        res = np.zeros(num_unique_street_names)
+        for col, row in enumerate(str(num)):
+            res[int(row), col] = 1
+        return res
+
     def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3)):
         self.viewer = None
         self._action_set = HyruleEnv.Actions
-        self.curriculum_learning = True
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
         path = os.getcwd() + path
@@ -60,7 +74,9 @@ class HyruleEnv(gym.GoalEnv):
         self.coords_df = pd.read_hdf(path + "coords.hdf5", key='df', mode='r')
         self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
-        self.agent_loc = 2331 #np.random.choice(self.coords_df.index)
+
+        self.curriculum_learning = True
+        self.agent_loc = 481 #np.random.choice(self.coords_df.index)
         self.agent_dir = 0
         self.difficulty = 0
         self.weighted = True
@@ -93,15 +109,10 @@ class HyruleEnv(gym.GoalEnv):
         goal_num = np.random.choice(self.G.nodes[pos]["goals_achieved"])
         label = self.label_df[(self.label_df.frame == int(goal_pos['timestamp']*30)) & (self.label_df.val == str(goal_num))]
         label_dir = 360 * ((int(label["coords"].values[0][0]) + int(label["coords"].values[0][1])) / 2) / 224
-        # we adjust for the agent direction discritization
 
+        # we adjust for the agent direction discritization
         cur_pos = pos
-        # pano_rotation = self.norm_angle(self.G.node[cur_pos]['angle'].values[0])
-        # cur_dir = label_dir - label_dir % 22.5
-        # cur_dir = (self.norm_angle(cur_dir + pano_rotation) + 180)
         cur_dir = self.norm_angle(label_dir)
-        # print("label_dir = " + str(label_dir))
-        # print("cur_dir = " + str(cur_dir))
         seen_poses = defaultdict(list)
         seen_poses[1].append(str(cur_pos) + " : " + str(cur_dir))
         actions = [self.Actions.DONE]
@@ -135,6 +146,8 @@ class HyruleEnv(gym.GoalEnv):
                 nodes -= set(nx.ego_graph(self.G, pos, radius=difficulty-1))
             if self.curriculum_learning:
                 self.agent_loc = np.random.choice(list(nodes))
+                self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
+        goal_num = self.convert_house_numbers(goal_num)
         return goal_pos, goal_num
 
 
@@ -195,10 +208,6 @@ class HyruleEnv(gym.GoalEnv):
             obs_shape = self.observation_space.shape
 
         pano_rotation = self.norm_angle(self.coords_df.loc[self.agent_loc].angle + 90)
-        # print("pano_rotation: " + str(pano_rotation))
-        # print("index: " + str(self.agent_loc))
-        # print("timestamp: " + str(self.coords_df.loc[self.agent_loc].timestamp))
-        # print("agent_dir: " + str(self.agent_dir))
         w = obs_shape[0]
         y = img.shape[0] - obs_shape[0]
         h = obs_shape[0]
@@ -227,6 +236,11 @@ class HyruleEnv(gym.GoalEnv):
         for idx, row in pano_labels[pano_labels.obj_type == 'house_number'].iterrows():
             if x < row['coords'][0] and x+w > row['coords'][1]:
                 visible_text["house_numbers"].append(int(row["val"]))
+        import pdb; pdb.set_trace()
+        for idx, row in pano_labels[pano_labels.obj_type == 'street_sign'].iterrows():
+            if x < row['coords'][0] and x+w > row['coords'][1]:
+                visible_text["house_numbers"].append(int(row["val"]))
+
         return visible_text
 
     def sample_gps(self, groundtruth, scale=1):
@@ -316,10 +330,10 @@ class HyruleEnv(gym.GoalEnv):
     def get_keys_to_action(self):
         KEYWORD_TO_KEY = {
             'LEFT_BIG': ord('a'),
-            'LEFT_SMALL': ord('s'),
-            'FORWARD': ord('d'),
-            'RIGHT_SMALL': ord('f'),
-            'RIGHT_BIG': ord(' '),
+            'LEFT_SMALL': ord('q'),
+            'FORWARD': ord('w'),
+            'RIGHT_SMALL': ord('e'),
+            'RIGHT_BIG': ord('d'),
             'DONE': ord('p'),
             'NOOP': ord('n'),
         }
