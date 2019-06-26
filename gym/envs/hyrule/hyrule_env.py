@@ -54,12 +54,9 @@ class HyruleEnv(gym.GoalEnv):
             res[int(row), col] = 1
         return res
 
-    @classmethod
-    def convert_street_sign(self, street_name):
-        num_unique_street_names = self.label_df[self.label_df.obj_type == 'street_sign'].val.unique().size
-        res = np.zeros(num_unique_street_names)
-        for col, row in enumerate(str(num)):
-            res[int(row), col] = 1
+    def convert_street_name(self, street_name):
+        res = self.label_df[self.label_df.obj_type == 'street_sign'].val.unique()
+        res = (res == street_name).astype(int)
         return res
 
     def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3), shaped_reward=True):
@@ -75,8 +72,8 @@ class HyruleEnv(gym.GoalEnv):
         self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
 
-        self.curriculum_learning = True
-        self.agent_loc = 481 #np.random.choice(self.coords_df.index)
+        self.curriculum_learning = False
+        self.agent_loc = 191 #np.random.choice(self.coords_df.index)
         self.agent_dir = 0
         self.difficulty = 0
         self.weighted = True
@@ -201,8 +198,8 @@ class HyruleEnv(gym.GoalEnv):
         for k, v in obs.items():
             if k != "image":
                 s = s + ", " + str(k) + ": " + str(v)
-        #print(self.agent_loc)
-        #print(s)
+        print(self.agent_loc)
+        print(s)
         return obs, reward, done, {}
 
 
@@ -235,7 +232,7 @@ class HyruleEnv(gym.GoalEnv):
         return res_img, x, w
 
     def get_visible_text(self, x, w):
-        visible_text = {"house_numbers": [], "street_signs": []}
+        visible_text = {"house_numbers": [], "street_names": []}
         pano_labels = self.label_df[self.label_df.frame == int(self.G.nodes[self.agent_loc]['timestamp'] * 30)]
         if not pano_labels.any().any():
             return visible_text
@@ -243,10 +240,10 @@ class HyruleEnv(gym.GoalEnv):
         for idx, row in pano_labels[pano_labels.obj_type == 'house_number'].iterrows():
             if x < row['coords'][0] and x+w > row['coords'][1]:
                 visible_text["house_numbers"].append(int(row["val"]))
-        # import pdb; pdb.set_trace()
+
         for idx, row in pano_labels[pano_labels.obj_type == 'street_sign'].iterrows():
             if x < row['coords'][0] and x+w > row['coords'][1]:
-                visible_text["house_numbers"].append(int(row["val"]))
+                visible_text["street_names"].append(self.convert_street_name(row["val"]))
 
         return visible_text
 
@@ -293,7 +290,6 @@ class HyruleEnv(gym.GoalEnv):
                     cur_dir += 22.5
                     actions.append(self.Actions.RIGHT_SMALL)
             actions.append(self.Actions.DONE)
-            print(actions)
         return actions
 
 
