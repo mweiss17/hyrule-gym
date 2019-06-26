@@ -50,7 +50,7 @@ class HyruleEnv(gym.GoalEnv):
     def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3)):
         self.viewer = None
         self._action_set = HyruleEnv.Actions
-        self.curriculum_learning = None
+        self.curriculum_learning = True
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
         path = os.getcwd() + path
@@ -60,7 +60,7 @@ class HyruleEnv(gym.GoalEnv):
         self.coords_df = pd.read_hdf(path + "coords.hdf5", key='df', mode='r')
         self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
-        self.agent_loc = 51
+        self.agent_loc = 2331 #np.random.choice(self.coords_df.index)
         self.agent_dir = 0
         self.difficulty = 1
         self.weighted = True
@@ -87,7 +87,7 @@ class HyruleEnv(gym.GoalEnv):
         angle = (math.atan2(y, x) * 180 / np.pi) + 180
         return np.abs(self.norm_angle(angle - self.agent_dir))
 
-    def select_goal(self, difficulty=1, trajectory_curric=False):
+    def select_goal(self, difficulty=0, trajectory_curric=False):
         pos = np.random.choice([x for x, y in self.G.nodes(data=True) if len(y['goals_achieved']) > 0])
         goal_pos = self.G.nodes[pos]
         goal_num = np.random.choice(self.G.nodes[pos]["goals_achieved"])
@@ -134,7 +134,7 @@ class HyruleEnv(gym.GoalEnv):
                 nodes = set(nx.ego_graph(self.G, pos, radius=difficulty))
                 nodes -= set(nx.ego_graph(self.G, pos, radius=difficulty-1))
             if self.curriculum_learning:
-                self.agent_loc = self.G.nodes[np.random.choice(list(nodes))]["data_df_key"]
+                self.agent_loc = pos #self.G.nodes[np.random.choice(list(nodes))]
         return goal_pos, goal_num
 
 
@@ -146,7 +146,7 @@ class HyruleEnv(gym.GoalEnv):
         neighbors = {}
         for n in [edge[1] for edge in list(self.G.edges(self.agent_loc))]:
             neighbors[n] = self.get_angle_between_nodes(n, self.agent_loc)
-        print(neighbors)
+
         if neighbors[min(neighbors, key=neighbors.get)] > 45:
             return # noop
 
@@ -162,13 +162,12 @@ class HyruleEnv(gym.GoalEnv):
         action = self._action_set(a)
         image, x, w = self._get_image()
         visible_text = self.get_visible_text(x, w)
-        print(visible_text)
         if action == self.Actions.FORWARD:
             self.transition()
         elif action == self.Actions.DONE:
             done = True
             reward = self.compute_reward(visible_text, self.desired_goal_num, {})
-            #print("reward: " + str(reward))
+            print("reward: " + str(reward))
         else:
             self.turn(action)
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
@@ -178,6 +177,12 @@ class HyruleEnv(gym.GoalEnv):
         if self.num_steps_taken >= self.max_num_steps and done == False:
             done = True
             reward = 0.0
+        s = "obs: "
+        for k, v in obs.items():
+            if k != "image":
+                s = s + ", " + str(k) + ": " + str(v)
+        print(self.agent_loc)
+        print(s)
         return obs, reward, done, {}
 
 
@@ -190,10 +195,10 @@ class HyruleEnv(gym.GoalEnv):
             obs_shape = self.observation_space.shape
 
         pano_rotation = self.norm_angle(self.coords_df.loc[self.agent_loc].angle + 90)
-        print("pano_rotation: " + str(pano_rotation))
-        print("index: " + str(self.agent_loc))
-        print("timestamp: " + str(self.coords_df.loc[self.agent_loc].timestamp))
-        print("agent_dir: " + str(self.agent_dir))
+        # print("pano_rotation: " + str(pano_rotation))
+        # print("index: " + str(self.agent_loc))
+        # print("timestamp: " + str(self.coords_df.loc[self.agent_loc].timestamp))
+        # print("agent_dir: " + str(self.agent_dir))
         w = obs_shape[0]
         y = img.shape[0] - obs_shape[0]
         h = obs_shape[0]
@@ -215,8 +220,8 @@ class HyruleEnv(gym.GoalEnv):
 
     def get_visible_text(self, x, w):
         visible_text = {"house_numbers": [], "street_signs": []}
-        pano_labels = self.label_df[self.label_df.frame == self.agent_loc]
-
+        pano_labels = self.label_df[self.label_df.frame == int(self.G.nodes[self.agent_loc]['timestamp'] * 30)]
+        # import pdb; pdb.set_trace()
         if not pano_labels.any().any():
             return visible_text
 
