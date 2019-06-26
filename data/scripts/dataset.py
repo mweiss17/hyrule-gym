@@ -125,7 +125,7 @@ def construct_graph_cleanup(mini_corl=False):
     node_blacklist = [928, 929, 930, 931, 1138, 6038, 6039, 5721, 5722, 6091, 6090, 6039, \
                       6082, 6197, 6039, 6088, 4809, 5964, 5504, 5505, 5467, 5514, 174,    \
                       188, 189, 190, 2390, 2391, 2392, 2393, 1862, 1863, 1512, 1821, 4227,\
-                      1874, 3894, 3895, 3896, 3897, 3898]
+                      1874, 3894, 3895, 3896, 3897, 3898, 2887, 608, 3025, 3090, 3013]
     node_blacklist.extend([x for x in range(1330, 1346)])
     node_blacklist.extend([x for x in range(3034, 3071)])
     node_blacklist.extend([x for x in range(879, 892)])
@@ -163,22 +163,26 @@ def construct_graph_cleanup(mini_corl=False):
     node_blacklist.extend([x for x in range(3229, 3237)])
     node_blacklist.extend([x for x in range(1835, 1843)])
     node_blacklist.extend([x for x in range(5102, 5113)])
+    node_blacklist.extend([x for x in range(2828, 2834)])
+    node_blacklist.extend([x for x in range(2605, 2608)])
     edge_blacklist = [(913, 915), (835, 925), (824, 826), (835, 837), (900, 902), (901, 903),        \
-                      (1534, 1536), (1511, 1724)]
+                      (1534, 1536), (1511, 1724), (191, 137), (50, 172)]
     add_edges = [(902,1329), (893, 894), (894, 895), (651, 2970), (638, 2983), (637, 2983), 		 \
-                 (2637, 3098), (2629, 3090), (2954, 3026), (3077, 3078), (3109, 3110), (2948, 2607), \
+                 (2637, 3098), (2629, 3089), (2954, 3026), (3077, 3078), (3109, 3110), (2948, 2607), \
                  (0, 1722), (6161, 6162), (6147, 6146), (6172, 6173), (6174, 6175), (4465, 4906),    \
                  (6212, 6213), (4465, 4464), (4467, 4466), (6037, 5600), (5458, 3418), (5129, 5128), \
                  (100, 101), (98, 1348), (99, 1348), (3630, 3631), (3631, 3632), (3632, 3633),       \
-                 (3634, 3635), (2375, 3661), (1834, 2234), (1834, 2233), (3366, 3367)]
+                 (3634, 3635), (2375, 3661), (1834, 2234), (1834, 2233), (3366, 3367), (2827, 2363), \
+                 (379, 611), (2948, 3110), (2604, 3110), (3076, 3077)]
     if mini_corl:
         node_blacklist.extend([x for x in range(877, 879)])
         node_blacklist.extend([x for x in range(52, 56)])
         node_blacklist.extend([x for x in range(31, 39)])
         node_blacklist.extend([x for x in range(2040, 2045)])
-        node_blacklist.extend([x for x in range(2058, 2063)])
+        node_blacklist.extend([x for x in range(2057, 2063)])
         node_blacklist.extend([x for x in range(3632, 3636)])
         node_blacklist.extend([x for x in range(3661, 3669)])
+        node_blacklist.extend([x for x in range(780, 784)])
 
     return node_blacklist, edge_blacklist, add_edges
 
@@ -234,4 +238,4 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
 
 
 
-create_dataset(data_path="/data/data/mini-corl/", do_images=True, do_labels=True, do_graph=True, mini_corl=True)
+create_dataset(data_path="/data/data/mini-corl/", do_images=False, do_labels=True, do_graph=True, mini_corl=True)
