@@ -178,7 +178,7 @@ class HyruleEnv(gym.GoalEnv):
         image, x, w = self._get_image()
         visible_text = self.get_visible_text(x, w)
 
-        if self.shaped_reward:
+        if self.shaped_reward and action not in [self.Actions.DONE, self.Actions.NOOP]:
             reward = self.compute_reward(visible_text, self.desired_goal_num, {})
             print("Current reward: " + str(reward))
 
@@ -265,7 +265,6 @@ class HyruleEnv(gym.GoalEnv):
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.coords_df[self.coords_df.timestamp == self.desired_goal_info['timestamp'].values[0]].iloc[0], scale=3.0)
         image, x, w = self._get_image()
-        self.init_spl = len(self.shortest_path_length(self.agent_loc, self.agent_dir, self.desired_goal_info))
         return {"image": image, "achieved_goal": self.get_visible_text(x, w), "desired_goal_num": self.desired_goal_num}
 
 
@@ -316,7 +315,8 @@ class HyruleEnv(gym.GoalEnv):
         """
         if self.shaped_reward:
             cur_spl = len(self.shortest_path_length(self.agent_loc, self.agent_dir, self.desired_goal_info))
-            return self.init_spl/max(cur_spl, self.init_spl)
+            print("SPL:", cur_spl)
+            return 1.0/cur_spl
         else:
             if desired_goal in visible_text["house_numbers"] and desired_goal in self.G.nodes[self.agent_loc]["goals_achieved"]:
                 #print("achieved goal")
