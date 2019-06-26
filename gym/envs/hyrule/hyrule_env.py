@@ -282,6 +282,7 @@ class HyruleEnv(gym.GoalEnv):
                 angle = target_dir
             else:
                 angle = self.get_angle_between_nodes(node, path[idx + 1])
+            angle = self.norm_angle(angle)
 
             # Turn to make the transition
             while np.abs(angle - cur_dir) > 22.5:
@@ -291,7 +292,8 @@ class HyruleEnv(gym.GoalEnv):
                 elif np.sign(angle - cur_dir) == 1:
                     cur_dir += 22.5
                     actions.append(self.Actions.RIGHT_SMALL)
-            actions.append(self.Actions.FORWARD)
+            actions.append(self.Actions.DONE)
+            print(actions)
         return actions
 
 
