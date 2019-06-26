@@ -275,30 +275,7 @@ class HyruleEnv(gym.GoalEnv):
             print("target_dir: " + str(target_dir))
             print("cur_dir: " + str(cur_dir))
             # Turn to make the transition
-            actions.append(self.angles_to_turn(cur_dir, target_dir))
-
-            # if target_dir - cur_dir > 180:
-            #     while np.abs(target_dir - cur_dir) > 22.5:
-            #         cur_dir = (cur_dir - 22.5) % 360
-            #         actions.append(self.Actions.RIGHT_SMALL)
-            # else:
-            #     while np.abs(target_dir - cur_dir) > 22.5:
-            #         cur_dir = (cur_dir + 22.5) % 360
-            #
-            #         actions.append(self.Actions.LEFT_SMALL)
-            #
-                # cur_dir -= 22.5
-                # actions.append(self.Actions.RIGHT_SMALL)
-                # total += 22.5
-                # if np.sign(target_dir - cur_dir) == -1:
-                #     cur_dir -= 22.5
-                #     actions.append(self.Actions.RIGHT_SMALL)
-                # elif np.sign(target_dir - cur_dir) == 1:
-                #     cur_dir += 22.5
-                #     actions.append(self.Actions.LEFT_SMALL)
-                # target_dir = self.norm_angle(target_dir)
-                # cur_dir = self.norm_angle(cur_dir)
-
+            actions.extend(self.angles_to_turn(cur_dir, target_dir))
             actions.append(self.Actions.DONE)
         print(actions)
         return actions
