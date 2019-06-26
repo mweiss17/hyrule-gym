@@ -150,7 +150,7 @@ class HyruleEnv(gym.GoalEnv):
                 self.agent_loc = np.random.choice(list(nodes))
                 self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
         goal_num = self.convert_house_numbers(goal_num)
-        return goal_pos, goal_num, label_dir
+        return goal_pos, goal_num
 
 
     def transition(self):
@@ -180,14 +180,14 @@ class HyruleEnv(gym.GoalEnv):
 
         if self.shaped_reward:
             reward = self.compute_reward(visible_text, self.desired_goal_num, {})
-            print("reward: " + str(reward))
+            print("Current reward: " + str(reward))
 
         if action == self.Actions.FORWARD:
             self.transition()
         elif action == self.Actions.DONE:
             done = True
             reward = self.compute_reward(visible_text, self.desired_goal_num, {})
-            print("reward: " + str(reward))
+            print("Mission reward: " + str(reward))
         else:
             self.turn(action)
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
@@ -201,8 +201,8 @@ class HyruleEnv(gym.GoalEnv):
         for k, v in obs.items():
             if k != "image":
                 s = s + ", " + str(k) + ": " + str(v)
-        print(self.agent_loc)
-        print(s)
+        #print(self.agent_loc)
+        #print(s)
         return obs, reward, done, {}
 
 
@@ -243,7 +243,7 @@ class HyruleEnv(gym.GoalEnv):
         for idx, row in pano_labels[pano_labels.obj_type == 'house_number'].iterrows():
             if x < row['coords'][0] and x+w > row['coords'][1]:
                 visible_text["house_numbers"].append(int(row["val"]))
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         for idx, row in pano_labels[pano_labels.obj_type == 'street_sign'].iterrows():
             if x < row['coords'][0] and x+w > row['coords'][1]:
                 visible_text["house_numbers"].append(int(row["val"]))
@@ -261,19 +261,20 @@ class HyruleEnv(gym.GoalEnv):
 
     def reset(self):
         self.num_steps_taken = 0
-        self.desired_goal_pos, self.desired_goal_num, self.desired_goal_dir = self.select_goal(self.difficulty)
+        self.desired_goal_info, self.desired_goal_num = self.select_goal(self.difficulty)
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
-        self.target_gps = self.sample_gps(self.coords_df[self.coords_df.timestamp == self.desired_goal_pos['timestamp'].values[0]].iloc[0], scale=3.0)
+        self.target_gps = self.sample_gps(self.coords_df[self.coords_df.timestamp == self.desired_goal_info['timestamp'].values[0]].iloc[0], scale=3.0)
         image, x, w = self._get_image()
-        self.init_spl = len(self.shortest_path_length(self.agent_loc, self.agent_dir, self.desired_goal_pos, self.desired_goal_dir))
+        self.init_spl = len(self.shortest_path_length(self.agent_loc, self.agent_dir, self.desired_goal_info))
         return {"image": image, "achieved_goal": self.get_visible_text(x, w), "desired_goal_num": self.desired_goal_num}
 
 
-    def shortest_path_length(self, cur_node, cur_dir, target_node, target_dir):
-        # import pdb; pdb.set_trace()
+    def shortest_path_length(self, cur_node, cur_dir, target_node_info):
         # finds a minimal trajectory to navigate to the target pose
-        target_index = self.coords_df[self.coords_df.frame == int(target_node['timestamp'] * 30)].index.values[0]
-        path = nx.shortest_path(self.G, cur_node, target=target_index)
+        # target_index = self.coords_df[self.coords_df.frame == int(target_node_info['timestamp'] * 30)].index.values[0]
+        target_node = target_node_info['angle'].index.values[0]
+        target_dir = target_node_info['angle'].values[0]
+        path = nx.shortest_path(self.G, cur_node, target=target_node)
         actions = []
         for idx, node in enumerate(path):
 
@@ -314,7 +315,7 @@ class HyruleEnv(gym.GoalEnv):
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
         if self.shaped_reward:
-            cur_spl = len(self.shortest_path_length(self.agent_loc, self.agent_dir, self.desired_goal_pos, self.desired_goal_dir))
+            cur_spl = len(self.shortest_path_length(self.agent_loc, self.agent_dir, self.desired_goal_info))
             return self.init_spl/max(cur_spl, self.init_spl)
         else:
             if desired_goal in visible_text["house_numbers"] and desired_goal in self.G.nodes[self.agent_loc]["goals_achieved"]:
