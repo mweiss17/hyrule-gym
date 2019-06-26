@@ -62,7 +62,7 @@ class HyruleEnv(gym.GoalEnv):
             res[int(row), col] = 1
         return res
 
-    def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3)):
+    def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3), shaped_reward=True):
         self.viewer = None
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
@@ -80,6 +80,8 @@ class HyruleEnv(gym.GoalEnv):
         self.agent_dir = 0
         self.difficulty = 0
         self.weighted = True
+
+        self.shaped_reward = shaped_reward
 
         self.max_num_steps = 10000
         self.num_steps_taken = 0
@@ -148,7 +150,7 @@ class HyruleEnv(gym.GoalEnv):
                 self.agent_loc = np.random.choice(list(nodes))
                 self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
         goal_num = self.convert_house_numbers(goal_num)
-        return goal_pos, goal_num
+        return goal_pos, goal_num, label_dir
 
 
     def transition(self):
@@ -175,6 +177,10 @@ class HyruleEnv(gym.GoalEnv):
         action = self._action_set(a)
         image, x, w = self._get_image()
         visible_text = self.get_visible_text(x, w)
+
+        if self.shaped_reward:
+            self.compute_reward(visible_text, self.desired_goal_num, {})
+
         if action == self.Actions.FORWARD:
             self.transition()
         elif action == self.Actions.DONE:
@@ -254,16 +260,19 @@ class HyruleEnv(gym.GoalEnv):
 
     def reset(self):
         self.num_steps_taken = 0
-        self.desired_goal_pos, self.desired_goal_num = self.select_goal(self.difficulty)
+        self.desired_goal_pos, self.desired_goal_num, self.desired_goal_dir = self.select_goal(self.difficulty)
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.coords_df[self.coords_df.timestamp == self.desired_goal_pos['timestamp'].values[0]].iloc[0], scale=3.0)
         image, x, w = self._get_image()
+        self.init_spl = len(self.shortest_path_length(self.agent_loc, self.agent_dir, self.desired_goal_pos, self.desired_goal_dir))
         return {"image": image, "achieved_goal": self.get_visible_text(x, w), "desired_goal_num": self.desired_goal_num}
 
 
     def shortest_path_length(self, cur_node, cur_dir, target_node, target_dir):
+        # import pdb; pdb.set_trace()
         # finds a minimal trajectory to navigate to the target pose
-        path = nx.shortest_path(self.G, cur_node, target=target_node)
+        target_index = self.coords_df[self.coords_df.frame == int(target_node['timestamp'] * 30)].index.values[0]
+        path = nx.shortest_path(self.G, cur_node, target=target_index)
         actions = []
         for idx, node in enumerate(path):
 
@@ -303,9 +312,13 @@ class HyruleEnv(gym.GoalEnv):
                 ob, reward, done, info = env.step()
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
-        if desired_goal in visible_text["house_numbers"] and desired_goal in self.G.nodes[self.agent_loc]["goals_achieved"]:
-            #print("achieved goal")
-            return 1.0
+        if self.shaped_reward:
+            cur_spl = len(self.shortest_path_length(self.agent_loc, self.agent_dir, self.desired_goal_pos, self.desired_goal_dir))
+            return self.init_spl/max(cur_spl, self.init_spl)
+        else:
+            if desired_goal in visible_text["house_numbers"] and desired_goal in self.G.nodes[self.agent_loc]["goals_achieved"]:
+                #print("achieved goal")
+                return 1.0
         return 0.0
 
     def render(self, mode='human'):
