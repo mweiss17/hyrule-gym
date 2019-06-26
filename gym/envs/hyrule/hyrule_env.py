@@ -72,14 +72,13 @@ class HyruleEnv(gym.GoalEnv):
         self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
 
-        self.curriculum_learning = False
+        self.curriculum_learning = True
         self.agent_loc = 191 #np.random.choice(self.coords_df.index)
         self.agent_dir = 0
         self.difficulty = 0
         self.weighted = True
 
         self.shaped_reward = shaped_reward
-
         self.max_num_steps = 10000
         self.num_steps_taken = 0
 
@@ -114,38 +113,16 @@ class HyruleEnv(gym.GoalEnv):
         cur_dir = self.norm_angle(label_dir)
         seen_poses = defaultdict(list)
         seen_poses[1].append(str(cur_pos) + " : " + str(cur_dir))
-        actions = [self.Actions.DONE]
-        if trajectory_curric:
-            neighbor = None
-            while len(actions) < difficulty:
-                if not neighbor:
-                    neighbor = np.random.choice([n for n in self.G.neighbors(cur_pos)])
-                    angle = self.get_angle_between_nodes(cur_pos, neighbor)
 
-                if np.abs(angle - cur_dir) > 45:
-                    if np.sign(angle - cur_dir) == -1:
-                        cur_dir -= 22.5
-                        actions.append(self.Actions.LEFT_SMALL)
-                    elif np.sign(angle - cur_dir) == 1:
-                        cur_dir += 22.5
-                        actions.append(self.Actions.RIGHT_SMALL)
-                else:
-                    cur_pos = neighbor
-                    neighbor = None
-                    actions.append(self.Actions.FORWARD)
-            if self.curriculum_learning:
-                self.agent_loc = cur_pos
-                self.agent_dir = cur_dir
-        else:
-            # randomly selects a node n-transitions from the goal node
-            if difficulty == 0:
-                nodes = [pos]
-            if difficulty >= 1:
-                nodes = set(nx.ego_graph(self.G, pos, radius=difficulty))
-                nodes -= set(nx.ego_graph(self.G, pos, radius=difficulty-1))
-            if self.curriculum_learning:
-                self.agent_loc = np.random.choice(list(nodes))
-                self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
+        # randomly selects a node n-transitions from the goal node
+        if difficulty == 0:
+            nodes = [pos]
+        if difficulty >= 1:
+            nodes = set(nx.ego_graph(self.G, pos, radius=difficulty))
+            nodes -= set(nx.ego_graph(self.G, pos, radius=difficulty-1))
+        if self.curriculum_learning:
+            self.agent_loc = np.random.choice(list(nodes))
+            self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
         goal_num = self.convert_house_numbers(goal_num)
         return goal_pos, goal_num
 
@@ -175,9 +152,6 @@ class HyruleEnv(gym.GoalEnv):
         image, x, w = self._get_image()
         visible_text = self.get_visible_text(x, w)
 
-        if self.shaped_reward and action not in [self.Actions.DONE, self.Actions.NOOP]:
-            reward = self.compute_reward(visible_text, self.desired_goal_num, {})
-            print("Current reward: " + str(reward))
 
         if action == self.Actions.FORWARD:
             self.transition()
@@ -187,6 +161,11 @@ class HyruleEnv(gym.GoalEnv):
             print("Mission reward: " + str(reward))
         else:
             self.turn(action)
+
+        if self.shaped_reward and action not in [self.Actions.DONE, self.Actions.NOOP]:
+            reward = self.compute_reward(visible_text, self.desired_goal_num, {})
+            print("Current reward: " + str(reward))
+
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
         obs = {"image": image, "mission": self.desired_goal_num, "rel_gps": rel_gps, "visible_text": visible_text}
@@ -198,8 +177,8 @@ class HyruleEnv(gym.GoalEnv):
         for k, v in obs.items():
             if k != "image":
                 s = s + ", " + str(k) + ": " + str(v)
-        print(self.agent_loc)
-        print(s)
+        # print(self.agent_loc)
+        # print(s)
         return obs, reward, done, {}
 
 
@@ -264,32 +243,64 @@ class HyruleEnv(gym.GoalEnv):
         image, x, w = self._get_image()
         return {"image": image, "achieved_goal": self.get_visible_text(x, w), "desired_goal_num": self.desired_goal_num}
 
+    def angles_to_turn(self, cur, target):
+        go_left = []
+        go_right = []
+        temp = cur
+        while np.abs(target - cur) > 22.5:
+            cur = (cur - 22.5) % 360
+            go_right.append(self.Actions.RIGHT_SMALL)
+        cur = temp
+        while np.abs(target - cur) > 22.5:
+            cur = (cur + 22.5) % 360
+            go_left.append(self.Actions.LEFT_SMALL)
+        if len(go_left) > len(go_right):
+            return go_right
+        return go_left
 
-    def shortest_path_length(self, cur_node, cur_dir, target_node_info):
+    def shortest_path_length(self):
         # finds a minimal trajectory to navigate to the target pose
         # target_index = self.coords_df[self.coords_df.frame == int(target_node_info['timestamp'] * 30)].index.values[0]
-        target_node = target_node_info['angle'].index.values[0]
-        target_dir = target_node_info['angle'].values[0]
+        cur_node = self.agent_loc
+        cur_dir = self.agent_dir
+        target_node = self.desired_goal_info['angle'].index.values[0]
+        target_dir = self.desired_goal_info['angle'].values[0]
         path = nx.shortest_path(self.G, cur_node, target=target_node)
         actions = []
         for idx, node in enumerate(path):
-
             # if you're in the goal pano
-            if idx + 1 == len(path):
-                angle = target_dir
-            else:
-                angle = self.get_angle_between_nodes(node, path[idx + 1])
-            angle = self.norm_angle(angle)
-
+            if not (idx + 1 == len(path)):
+                target_dir = self.get_angle_between_nodes(node, path[idx + 1])
+            cur_dir = cur_dir + 180
+            print("target_dir: " + str(target_dir))
+            print("cur_dir: " + str(cur_dir))
             # Turn to make the transition
-            while np.abs(angle - cur_dir) > 22.5:
-                if np.sign(angle - cur_dir) == -1:
-                    cur_dir -= 22.5
-                    actions.append(self.Actions.LEFT_SMALL)
-                elif np.sign(angle - cur_dir) == 1:
-                    cur_dir += 22.5
-                    actions.append(self.Actions.RIGHT_SMALL)
+            actions.append(self.angles_to_turn(cur_dir, target_dir))
+
+            # if target_dir - cur_dir > 180:
+            #     while np.abs(target_dir - cur_dir) > 22.5:
+            #         cur_dir = (cur_dir - 22.5) % 360
+            #         actions.append(self.Actions.RIGHT_SMALL)
+            # else:
+            #     while np.abs(target_dir - cur_dir) > 22.5:
+            #         cur_dir = (cur_dir + 22.5) % 360
+            #
+            #         actions.append(self.Actions.LEFT_SMALL)
+            #
+                # cur_dir -= 22.5
+                # actions.append(self.Actions.RIGHT_SMALL)
+                # total += 22.5
+                # if np.sign(target_dir - cur_dir) == -1:
+                #     cur_dir -= 22.5
+                #     actions.append(self.Actions.RIGHT_SMALL)
+                # elif np.sign(target_dir - cur_dir) == 1:
+                #     cur_dir += 22.5
+                #     actions.append(self.Actions.LEFT_SMALL)
+                # target_dir = self.norm_angle(target_dir)
+                # cur_dir = self.norm_angle(cur_dir)
+
             actions.append(self.Actions.DONE)
+        print(actions)
         return actions
 
 
@@ -312,7 +323,7 @@ class HyruleEnv(gym.GoalEnv):
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
         if self.shaped_reward:
-            cur_spl = len(self.shortest_path_length(self.agent_loc, self.agent_dir, self.desired_goal_info))
+            cur_spl = len(self.shortest_path_length())
             print("SPL:", cur_spl)
             return 1.0/cur_spl
         else:
@@ -347,7 +358,7 @@ class HyruleEnv(gym.GoalEnv):
             'FORWARD': ord('w'),
             'RIGHT_SMALL': ord('e'),
             'RIGHT_BIG': ord('d'),
-            'DONE': ord('p'),
+            'DONE': ord('s'),
             'NOOP': ord('n'),
         }
 
