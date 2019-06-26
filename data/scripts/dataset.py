@@ -28,16 +28,20 @@ def process_labels(paths, G, coords):
                 continue
             frame = int(p.split("_")[-1].split(".")[0])
             name = node.find("name").text
-            obj_type, val = name.split("-")
+            if len(name.split("-")) == 2:
+                obj_type, val = name.split("-")
+            elif len(name.split("-")) == 3:
+                obj_type, val, apt = name.split("-")
+                #val = "-".join(apt)
             bndbox = (node.find("bndbox").find("xmin").text, node.find("bndbox").find("xmax").text, node.find("bndbox").find("ymin").text, node.find("bndbox").find("ymax").text)
             labels.append((frame, obj_type, val, bndbox))
     label_df = pd.DataFrame(labels, columns = ["frame", "obj_type", "val", "coords"])
     # change label coords to mini space
     label_df = label_df[label_df.frame.isin(coords)]
-    labels = label_df[label_df["frame"] == int(frame)]
+    # labels = label_df[label_df["frame"] == int(frame)]
 
-    if labels.any().any():
-        for ix, row in labels.iterrows():
+    if label_df.any().any():
+        for ix, row in label_df.iterrows():
             row_coords = [int(x) for x in row["coords"]]
             new_coords = (int(width * row_coords[0] / shape[1]),
                           int(width * row_coords[1] / shape[1]),
@@ -58,12 +62,11 @@ def process_labels(paths, G, coords):
 
     for node in G.nodes:
         G.nodes[node]['goals_achieved'] = []
-
     for node in G.nodes:
         frame = int(G.nodes[node]['timestamp'].values[0] * 30)
         if frame in goal_panos.keys():
+            print("frame: " + str(frame) + ", node: " + str(node))
             G.nodes[node]['goals_achieved'].append(int(goal_panos[frame]["val"]))
-
     return label_df, G
 
 def construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges, path, mini_corl=False):
@@ -112,8 +115,10 @@ def process_images(paths):
     # Get panos and crop'em into thumbnails
     for idx, path in enumerate(tqdm(paths, desc="Loading thumbnails")):
         frame = int(path.split("_")[-1].split(".")[0])
+        print(frame)
         frames[idx] = frame
         image = cv2.imread(path)
+        print(path)
         image = cv2.resize(image, (width, height))[:, :, ::-1]
         image = image[crop_margin:height - crop_margin]
         thumbnails[idx] = image
@@ -210,6 +215,8 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
                          node_size=10,
                          alpha=0.8,
                          with_label=True)
+        #nx.draw(G, pos,node_color='r', node_size=1)
+
         plt.axis('equal')
         plt.show()
         nx.write_gpickle(G, data_path + "processed/graph.pkl")
@@ -226,7 +233,7 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
     if do_images:
         images = process_images(img_paths)
         f = gzip.GzipFile(data_path + "processed/images.pkl.gz", "w")
-        pickle.dump(images,f)
+        pickle.dump(images, f)
         f.close()
 
     if do_labels:
@@ -236,6 +243,9 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
         label_df.to_hdf(data_path + "processed/labels.hdf5", key="df", index=False)
         nx.write_gpickle(G, data_path + "processed/graph.pkl")
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> c46bbf9a315591d09cfa81027266e6d52c59ce68
 create_dataset(data_path="/data/data/mini-corl/", do_images=False, do_labels=True, do_graph=True, mini_corl=True)
