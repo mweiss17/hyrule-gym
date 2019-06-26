@@ -9,10 +9,6 @@ Hyrule-gym is an environment built on the OpenAI gym toolkit. After cloning the 
 
 The controls to drive your agent are :`a` for hard left turn, `s` for small left turn, `d` for forward transition, `f` for small right turn, and `spacebar` for hard right turn.
 
-
-![Alt Text](data/going_to_element.gif)
-
-
 Prerequisites to construct your own environment from 360 video:
 
 - Install OrbSlam
