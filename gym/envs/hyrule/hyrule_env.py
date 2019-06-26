@@ -167,7 +167,8 @@ class HyruleEnv(gym.GoalEnv):
         visible_text = self.get_visible_text(x, w)
 
         if self.shaped_reward:
-            self.compute_reward(visible_text, self.desired_goal_num, {})
+            reward = self.compute_reward(visible_text, self.desired_goal_num, {})
+            print("reward: " + str(reward))
 
         if action == self.Actions.FORWARD:
             self.transition()
