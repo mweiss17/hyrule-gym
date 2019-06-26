@@ -243,9 +243,4 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
         label_df.to_hdf(data_path + "processed/labels.hdf5", key="df", index=False)
         nx.write_gpickle(G, data_path + "processed/graph.pkl")
 
-<<<<<<< HEAD
-
-
-=======
->>>>>>> c46bbf9a315591d09cfa81027266e6d52c59ce68
 create_dataset(data_path="/data/data/mini-corl/", do_images=False, do_labels=True, do_graph=True, mini_corl=True)
