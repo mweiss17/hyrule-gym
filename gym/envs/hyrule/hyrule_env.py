@@ -267,16 +267,16 @@ class HyruleEnv(gym.GoalEnv):
         cur_node = self.agent_loc
         cur_dir = self.agent_dir
         target_node = self.desired_goal_info['angle'].index.values[0]
-        target_dir = self.desired_goal_dir
         path = nx.shortest_path(self.G, cur_node, target=target_node)
         actions = []
         for idx, node in enumerate(path):
-            # if you're in the goal pano
             if not (idx + 1 == len(path)):
-                target_dir = self.get_angle_between_nodes(node, path[idx + 1])
-            # Turn to make the transition
-            actions.extend(self.angles_to_turn(cur_dir + 180, target_dir + 180))
-            actions.append(self.Actions.DONE)
+                target_dir = self.get_angle_between_nodes(node, path[idx])
+                actions.extend(self.angles_to_turn(cur_dir + 180, target_dir + 180))
+                actions.append(self.Actions.FORWARD)
+            else:
+                actions.extend(self.angles_to_turn(cur_dir + 180, self.desired_goal_dir + 180))
+                actions.append(self.Actions.DONE)
         print(actions)
         return actions
 
