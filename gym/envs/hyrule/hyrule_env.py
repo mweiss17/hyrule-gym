@@ -49,7 +49,7 @@ class HyruleEnv(gym.GoalEnv):
 
     @classmethod
     def convert_house_numbers(cls, num):
-        res = np.zeros((10, 5))
+        res = np.zeros((10, 4))
         for col, row in enumerate(str(num)):
             res[int(row), col] = 1
         return res
@@ -106,6 +106,7 @@ class HyruleEnv(gym.GoalEnv):
         pos = np.random.choice([x for x, y in self.G.nodes(data=True) if len(y['goals_achieved']) > 0])
         goal_pos = self.G.nodes[pos]
         goal_num = np.random.choice(self.G.nodes[pos]["goals_achieved"])
+        self.goal_id = goal_num
         label = self.label_df[(self.label_df.frame == int(goal_pos['timestamp']*30)) & (self.label_df.val == str(goal_num))]
         pano_rotation = self.norm_angle(self.coords_df.loc[pos].angle )
         label_dir = self.norm_angle(360 * ((int(label["coords"].values[0][0]) + int(label["coords"].values[0][1])) / 2) / 224)
@@ -160,13 +161,13 @@ class HyruleEnv(gym.GoalEnv):
             self.transition()
         elif action == self.Actions.DONE:
             done = True
-            reward = self.compute_reward(visible_text, self.desired_goal_num, {}, done)
+            reward = self.compute_reward(visible_text, {}, done)
             print("Mission reward: " + str(reward))
         else:
             self.turn(action)
 
         if self.shaped_reward and action not in [self.Actions.DONE, self.Actions.NOOP]:
-            reward = self.compute_reward(visible_text, self.desired_goal_num, {}, done)
+            reward = self.compute_reward(visible_text, {}, done)
             print("Current reward: " + str(reward))
 
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
@@ -281,7 +282,7 @@ class HyruleEnv(gym.GoalEnv):
         return actions
 
 
-    def compute_reward(self, visible_text, desired_goal, info, done):
+    def compute_reward(self, visible_text, info, done):
         """Compute the step reward. This externalizes the reward function and makes
         it dependent on an a desired goal and the one that was achieved. If you wish to include
         additional rewards that are independent of the goal, you can include the necessary values
@@ -304,7 +305,7 @@ class HyruleEnv(gym.GoalEnv):
             print("SPL:", cur_spl)
             return 1.0/cur_spl
         else:
-            if desired_goal in visible_text["house_numbers"] and desired_goal in self.G.nodes[self.agent_loc]["goals_achieved"]:
+            if self.goal_id in visible_text["house_numbers"] and self.goal_id in self.G.nodes[self.agent_loc]["goals_achieved"]:
                 print("achieved goal")
                 return 1.0
         return 0.0
