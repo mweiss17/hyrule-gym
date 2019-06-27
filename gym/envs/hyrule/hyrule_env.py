@@ -106,11 +106,13 @@ class HyruleEnv(gym.GoalEnv):
         goal_pos = self.G.nodes[pos]
         goal_num = np.random.choice(self.G.nodes[pos]["goals_achieved"])
         label = self.label_df[(self.label_df.frame == int(goal_pos['timestamp']*30)) & (self.label_df.val == str(goal_num))]
-        label_dir = 360 * ((int(label["coords"].values[0][0]) + int(label["coords"].values[0][1])) / 2) / 224
+        pano_rotation = self.norm_angle(self.coords_df.loc[pos].angle )
+        label_dir = self.norm_angle(360 * ((int(label["coords"].values[0][0]) + int(label["coords"].values[0][1])) / 2) / 224)
+        goal_dir = self.norm_angle(-label_dir + pano_rotation)
 
         # we adjust for the agent direction discritization
         cur_pos = pos
-        cur_dir = self.norm_angle(label_dir)
+        cur_dir = label_dir
         seen_poses = defaultdict(list)
         seen_poses[1].append(str(cur_pos) + " : " + str(cur_dir))
 
@@ -124,7 +126,7 @@ class HyruleEnv(gym.GoalEnv):
             self.agent_loc = np.random.choice(list(nodes))
             self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
         goal_num = self.convert_house_numbers(goal_num)
-        return goal_pos, goal_num
+        return goal_pos, goal_num, goal_dir
 
 
     def transition(self):
@@ -237,7 +239,7 @@ class HyruleEnv(gym.GoalEnv):
 
     def reset(self):
         self.num_steps_taken = 0
-        self.desired_goal_info, self.desired_goal_num = self.select_goal(self.difficulty)
+        self.desired_goal_info, self.desired_goal_num, self.desired_goal_dir = self.select_goal(self.difficulty)
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.coords_df[self.coords_df.timestamp == self.desired_goal_info['timestamp'].values[0]].iloc[0], scale=3.0)
         image, x, w = self._get_image()
@@ -264,18 +266,15 @@ class HyruleEnv(gym.GoalEnv):
         cur_node = self.agent_loc
         cur_dir = self.agent_dir
         target_node = self.desired_goal_info['angle'].index.values[0]
-        target_dir = self.desired_goal_info['angle'].values[0]
+        target_dir = self.desired_goal_dir
         path = nx.shortest_path(self.G, cur_node, target=target_node)
         actions = []
         for idx, node in enumerate(path):
             # if you're in the goal pano
             if not (idx + 1 == len(path)):
                 target_dir = self.get_angle_between_nodes(node, path[idx + 1])
-            cur_dir = cur_dir + 180
-            print("target_dir: " + str(target_dir))
-            print("cur_dir: " + str(cur_dir))
             # Turn to make the transition
-            actions.extend(self.angles_to_turn(cur_dir, target_dir))
+            actions.extend(self.angles_to_turn(cur_dir + 180, target_dir + 180))
             actions.append(self.Actions.DONE)
         print(actions)
         return actions
@@ -305,7 +304,7 @@ class HyruleEnv(gym.GoalEnv):
             return 1.0/cur_spl
         else:
             if desired_goal in visible_text["house_numbers"] and desired_goal in self.G.nodes[self.agent_loc]["goals_achieved"]:
-                #print("achieved goal")
+                print("achieved goal")
                 return 1.0
         return 0.0
 
