@@ -304,7 +304,7 @@ class HyruleEnv(gym.GoalEnv):
         if self.shaped_reward and not done:
             cur_spl = len(self.shortest_path_length())
             #print("SPL:", cur_spl)
-            return 1.0/cur_spl
+            return 1.0/(2*cur_spl)
         else:
             if self.goal_id in visible_text["house_numbers"] and self.goal_id in self.G.nodes[self.agent_loc]["goals_achieved"]:
                 #print("achieved goal")
