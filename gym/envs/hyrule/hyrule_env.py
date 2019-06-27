@@ -156,7 +156,6 @@ class HyruleEnv(gym.GoalEnv):
         image, x, w = self._get_image()
         visible_text = self.get_visible_text(x, w)
 
-
         if action == self.Actions.FORWARD:
             self.transition()
         elif action == self.Actions.DONE:
@@ -245,7 +244,8 @@ class HyruleEnv(gym.GoalEnv):
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.coords_df[self.coords_df.timestamp == self.desired_goal_info['timestamp'].values[0]].iloc[0], scale=3.0)
         image, x, w = self._get_image()
-        return {"image": image, "achieved_goal": self.get_visible_text(x, w), "desired_goal_num": self.desired_goal_num}
+        rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
+        return {"image": image, "mission": self.desired_goal_num, "rel_gps": rel_gps, "visible_text": self.get_visible_text(x, w)}
 
     def angles_to_turn(self, cur, target):
         go_left = []
