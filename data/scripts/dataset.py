@@ -17,6 +17,7 @@ width = 224
 shape = (3840, 2160)
 crop_margin = int(height * (1/6))
 
+
 def process_labels(paths, G, coords):
     """ This function processes the labels into a nice format for the simulator"""
     labels = []
@@ -27,26 +28,30 @@ def process_labels(paths, G, coords):
             if node.tag != "object":
                 continue
             frame = int(p.split("_")[-1].split(".")[0])
-            name = node.find("name").text
-            if len(name.split("-")) == 2:
-                obj_type, val = name.split("-")
-            elif len(name.split("-")) == 3:
-                obj_type, val, apt = name.split("-")
-                #val = "-".join(apt)
+            text_label = node.find("name").text
+            house_number = None
+
+            if text_label.split("-")[0] == "street_sign":
+                obj_type, street_name = text_label.split("-")
+            elif text_label.split("-")[0] == "house_number":
+                obj_type, house_number, street_name = text_label.split("-")
+            elif text_label.split("-")[0] == "door":
+                obj_type, house_number, street_name = text_label.split("-")
             bndbox = (node.find("bndbox").find("xmin").text, node.find("bndbox").find("xmax").text, node.find("bndbox").find("ymin").text, node.find("bndbox").find("ymax").text)
-            labels.append((frame, obj_type, val, bndbox))
+            labels.append((frame, obj_type, house_number, street_name, bndbox))
     label_df = pd.DataFrame(labels, columns = ["frame", "obj_type", "val", "coords"])
     # change label coords to mini space
     label_df = label_df[label_df.frame.isin(coords)]
+    # import pdb; pdb.set_trace()
     # labels = label_df[label_df["frame"] == int(frame)]
 
     if label_df.any().any():
         for ix, row in label_df.iterrows():
             row_coords = [int(x) for x in row["coords"]]
-            new_coords = (int(width * row_coords[0] / shape[1]),
-                          int(width * row_coords[1] / shape[1]),
-                          int((height - 2 * crop_margin) * row_coords[2] / shape[0]),
-                          int((height - 2 * crop_margin) * row_coords[3] / shape[0]))
+            new_coords = (int(width * row_coords[0] / shape[0]),
+                          int(width * row_coords[1] / shape[0]),
+                          int((height - 2 * crop_margin) * row_coords[2] / shape[1]),
+                          int((height - 2 * crop_margin) * row_coords[3] / shape[1]))
             label_df.at[ix, "coords"] = new_coords
 
     # find target panos -- they are the ones with the biggest bounding box an the house number
