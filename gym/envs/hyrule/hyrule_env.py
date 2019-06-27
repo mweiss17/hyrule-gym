@@ -212,19 +212,29 @@ class HyruleEnv(gym.GoalEnv):
         return res_img, x, w
 
     def get_visible_text(self, x, w):
-        visible_text = {"house_numbers": [], "street_names": []}
+        visible_text = {}
         pano_labels = self.label_df[self.label_df.frame == int(self.G.nodes[self.agent_loc]['timestamp'] * 30)]
         if not pano_labels.any().any():
             return visible_text
 
+        house_numbers = []
         for idx, row in pano_labels[pano_labels.obj_type == 'house_number'].iterrows():
             if x < row['coords'][0] and x+w > row['coords'][1]:
-                visible_text["house_numbers"].append(self.convert_house_numbers(row["house_number"]))
+                house_numbers.append(self.convert_house_numbers(row["house_number"]))
+        temp = np.zeros(120)
+        if len(house_numbers) != 0:
+            temp[:120] = np.hstack(house_numbers)[:120]
+        visible_text["house_numbers"] = temp
 
+        num_streets = self.label_df[self.label_df.obj_type == 'street_sign'].street_name.unique().size
+        street_signs = []
         for idx, row in pano_labels[pano_labels.obj_type == 'street_sign'].iterrows():
             if x < row['coords'][0] and x+w > row['coords'][1]:
-                visible_text["street_names"].append(self.convert_street_name(row["street_name"]))
-
+                street_signs.append(self.convert_street_name(row["street_name"]))
+        temp = np.zeros(6)
+        if len(street_signs) != 0:
+            temp[:6] =  np.hstack(street_signs)[:6]
+        visible_text["street_names"] = temp
         return visible_text
 
     def sample_gps(self, groundtruth, scale=1):
