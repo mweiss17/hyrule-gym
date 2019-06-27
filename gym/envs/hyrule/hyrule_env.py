@@ -52,7 +52,7 @@ class HyruleEnv(gym.GoalEnv):
         res = np.zeros((4, 10))
         for col, row in enumerate(str(num)):
             res[col, int(row)] = 1
-        return res
+        return res.reshape(-1)
 
     def convert_street_name(self, street_name):
         res = self.label_df[self.label_df.obj_type == 'street_sign'].street_name.unique()
@@ -64,8 +64,8 @@ class HyruleEnv(gym.GoalEnv):
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
-        #path = os.getcwd() + path
-        path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym" + path
+        path = os.getcwd() + path
+        #path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym" + path
         f = gzip.GzipFile(path + "images.pkl.gz", "r")
         self.images_df = pickle.load(f)
         f.close()
@@ -124,8 +124,8 @@ class HyruleEnv(gym.GoalEnv):
         if self.curriculum_learning:
             self.agent_loc = np.random.choice(list(nodes))
             self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
-        goal_num = self.convert_house_numbers(goal.house_number)
-        return goal_idx, goal_num, goal_dir
+        goal_address = np.append(self.convert_house_numbers(goal.house_number),  self.convert_street_name(goal.street_name))
+        return goal_idx, goal_address, goal_dir
 
 
     def transition(self):
@@ -168,7 +168,7 @@ class HyruleEnv(gym.GoalEnv):
 
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
-        obs = {"image": image, "mission": self.goal_house_num, "rel_gps": rel_gps, "visible_text": visible_text}
+        obs = {"image": image, "mission": self.goal_address, "rel_gps": rel_gps, "visible_text": visible_text}
         self.num_steps_taken += 1
         if self.num_steps_taken >= self.max_num_steps and done == False:
             done = True
@@ -179,6 +179,7 @@ class HyruleEnv(gym.GoalEnv):
                 s = s + ", " + str(k) + ": " + str(v)
         # print(self.agent_loc)
         print(s)
+        print(obs)
         return obs, reward, done, {}
 
 
@@ -218,7 +219,7 @@ class HyruleEnv(gym.GoalEnv):
 
         for idx, row in pano_labels[pano_labels.obj_type == 'house_number'].iterrows():
             if x < row['coords'][0] and x+w > row['coords'][1]:
-                visible_text["house_numbers"].append(int(row["house_number"]))
+                visible_text["house_numbers"].append(self.convert_house_numbers(row["house_number"]))
 
         for idx, row in pano_labels[pano_labels.obj_type == 'street_sign'].iterrows():
             if x < row['coords'][0] and x+w > row['coords'][1]:
@@ -238,12 +239,12 @@ class HyruleEnv(gym.GoalEnv):
 
     def reset(self):
         self.num_steps_taken = 0
-        self.goal_idx, self.goal_house_num, self.goal_dir = self.select_goal(self.difficulty)
+        self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(self.difficulty)
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.coords_df.loc[self.goal_idx], scale=3.0)
         image, x, w = self._get_image()
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
-        return {"image": image, "mission": self.goal_house_num, "rel_gps": rel_gps, "visible_text": self.get_visible_text(x, w)}
+        return {"image": image, "mission": self.goal_address, "rel_gps": rel_gps, "visible_text": self.get_visible_text(x, w)}
 
     def angles_to_turn(self, cur, target):
         go_left = []
