@@ -73,7 +73,7 @@ class HyruleEnv(gym.GoalEnv):
         self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
 
-        self.curriculum_learning = False
+        self.curriculum_learning = True
         self.agent_loc = 191 #np.random.choice(self.coords_df.index)
         self.agent_dir = 0
         self.difficulty = 0
@@ -157,13 +157,13 @@ class HyruleEnv(gym.GoalEnv):
             self.transition()
         elif action == self.Actions.DONE:
             done = True
-            reward = self.compute_reward(visible_text, {}, done)
+            reward = self.compute_reward(x, {}, done)
             #print("Mission reward: " + str(reward))
         else:
             self.turn(action)
 
         if self.shaped_reward and action not in [self.Actions.DONE, self.Actions.NOOP]:
-            reward = self.compute_reward(visible_text, {}, done)
+            reward = self.compute_reward(x, {}, done)
             #print("Current reward: " + str(reward))
 
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
@@ -295,7 +295,7 @@ class HyruleEnv(gym.GoalEnv):
         return actions
 
 
-    def compute_reward(self, visible_text, info, done):
+    def compute_reward(self, x, info, done):
         """Compute the step reward. This externalizes the reward function and makes
         it dependent on an a desired goal and the one that was achieved. If you wish to include
         additional rewards that are independent of the goal, you can include the necessary values
@@ -318,9 +318,14 @@ class HyruleEnv(gym.GoalEnv):
             #print("SPL:", cur_spl)
             return 1.0/(2*cur_spl)
         else:
-            import pdb; pdb.set_trace()
-            if self.goal_id in visible_text["house_numbers"] and self.goal_id in self.G.nodes[self.agent_loc]["goals_achieved"]:
-                #print("achieved goal")
+            label = self.label_df[(self.label_df.frame == self.coords_df.loc[self.goal_idx].frame) & (self.label_df.obj_type == "door") & (self.label_df.house_number == self.goal_id)]
+            is_in_correct_pano = (label.frame == int(self.coords_df.loc[self.agent_loc].frame)).values[0]
+            is_facing_correct_dir = False
+            coords = label.coords.values[0]
+            if x < coords[0] and x + 84 > coords[1]:
+                is_facing_correct_dir = True
+            if is_in_correct_pano and is_facing_correct_dir:
+                print("achieved goal")
                 return 1.0
         return 0.0
 
