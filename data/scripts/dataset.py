@@ -21,30 +21,43 @@ crop_margin = int(height * (1/6))
 def process_labels(paths, G, coords):
     """ This function processes the labels into a nice format for the simulator"""
     labels = []
+    failed_to_parse = []
     for p in paths:
         xtree = et.parse(p)
         xroot = xtree.getroot()
-        for node in xroot:
+        for idx, node in enumerate(xroot):
             if node.tag != "object":
                 continue
             frame = int(p.split("_")[-1].split(".")[0])
             text_label = node.find("name").text
             house_number = None
-
             if text_label.split("-")[0] == "street_sign":
-                obj_type, street_name = text_label.split("-")
+                try:
+                    obj_type, street_name = text_label.split("-")
+                except Exception as e:
+                    print("street_sign: " + str(e))
+                    failed_to_parse.append(text_label)
+                    continue
             elif text_label.split("-")[0] == "house_number":
-                obj_type, house_number, street_name = text_label.split("-")
+                try:
+                    obj_type, house_number, street_name = text_label.split("-")
+                except Exception as e:
+                    print("house_number: " + str(e))
+                    failed_to_parse.append(text_label)
+                    continue
             elif text_label.split("-")[0] == "door":
-                obj_type, house_number, street_name = text_label.split("-")
+                try:
+                    obj_type, house_number, street_name = text_label.split("-")
+                except Exception as e:
+                    print("door: " + str(e))
+                    failed_to_parse.append(text_label)
+                    continue
             bndbox = (node.find("bndbox").find("xmin").text, node.find("bndbox").find("xmax").text, node.find("bndbox").find("ymin").text, node.find("bndbox").find("ymax").text)
             labels.append((frame, obj_type, house_number, street_name, bndbox))
-    label_df = pd.DataFrame(labels, columns = ["frame", "obj_type", "val", "coords"])
-    # change label coords to mini space
-    label_df = label_df[label_df.frame.isin(coords)]
-    # import pdb; pdb.set_trace()
-    # labels = label_df[label_df["frame"] == int(frame)]
+    label_df = pd.DataFrame(labels, columns = ["frame", "obj_type", "house_number", "street_name", "coords"])
+    print("num labels failed to parse: " + str(len(failed_to_parse)))
 
+    # change label coords to mini space
     if label_df.any().any():
         for ix, row in label_df.iterrows():
             row_coords = [int(x) for x in row["coords"]]
@@ -56,13 +69,12 @@ def process_labels(paths, G, coords):
 
     # find target panos -- they are the ones with the biggest bounding box an the house number
     goal_panos = {}
-    for house_number in label_df[label_df.obj_type == "house_number"]["val"].unique():
-        house_number = str(house_number)
-        matches = label_df[label_df.val == house_number]
+    for house_number in label_df[label_df.obj_type == "door"]["house_number"].unique():
         areas = []
-        for coords in [x for x in matches['coords'].values]:
+        matched_doors = label_df[(label_df.obj_type == "door") & (label_df.house_number == "6652")]
+        for coords in [x for x in matched_doors['coords'].values]:
             areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
-        goal_pano = matches.iloc[areas.index(max(areas))]
+        goal_pano = matched_doors.iloc[areas.index(max(areas))]
         goal_panos[int(goal_pano.frame)] = goal_pano
 
     for node in G.nodes:
@@ -196,7 +208,7 @@ def construct_graph_cleanup(mini_corl=False):
 
     return node_blacklist, edge_blacklist, add_edges
 
-def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True, do_graph=True, limit=None, mini_corl=False):
+def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True, do_graph=True, do_plot=False, limit=None, mini_corl=False):
     """
     Loads in the pano images from disk, crops them, resizes them, and writes them to disk.
     Then pre-processes the pose data associated with the image and calls the fn to create the graph and to process the labels
@@ -213,17 +225,18 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
 
         G, coords_df = construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges, data_path, mini_corl)
         coords_df.to_hdf(data_path + "processed/coords.hdf5", key='df')
-        pos = {k: v.get("coords")[0:2] for k, v in G.nodes(data=True)}
-        nx.draw_networkx(G, pos,
-                         nodelist=G.nodes,
-                         node_color='r',
-                         node_size=10,
-                         alpha=0.8,
-                         with_label=True)
-        #nx.draw(G, pos,node_color='r', node_size=1)
+        if do_plot:
+            pos = {k: v.get("coords")[0:2] for k, v in G.nodes(data=True)}
+            nx.draw_networkx(G, pos,
+                             nodelist=G.nodes,
+                             node_color='r',
+                             node_size=10,
+                             alpha=0.8,
+                             with_label=True)
+            #nx.draw(G, pos,node_color='r', node_size=1)
 
-        plt.axis('equal')
-        plt.show()
+            plt.axis('equal')
+            plt.show()
         nx.write_gpickle(G, data_path + "processed/graph.pkl")
 
     else:
@@ -248,4 +261,4 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
         label_df.to_hdf(data_path + "processed/labels.hdf5", key="df", index=False)
         nx.write_gpickle(G, data_path + "processed/graph.pkl")
 
-create_dataset(data_path="/data/data/mini-corl/", do_images=False, do_labels=True, do_graph=True, mini_corl=True)
+create_dataset(data_path="/data/data/mini-corl/", do_images=False, do_labels=True, do_graph=True, do_plot=False, mini_corl=True)
