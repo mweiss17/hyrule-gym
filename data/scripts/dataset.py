@@ -53,8 +53,8 @@ def process_labels(paths, coords):
                     failed_to_parse.append(text_label)
                     continue
             bndbox = (node.find("bndbox").find("xmin").text, node.find("bndbox").find("xmax").text, node.find("bndbox").find("ymin").text, node.find("bndbox").find("ymax").text)
-            labels.append((frame, obj_type, house_number, street_name, bndbox))
-    label_df = pd.DataFrame(labels, columns = ["frame", "obj_type", "house_number", "street_name", "coords"])
+            labels.append((frame, obj_type, house_number, street_name, False, bndbox))
+    label_df = pd.DataFrame(labels, columns = ["frame", "obj_type", "house_number", "street_name", "is_goal", "coords"])
     print("num labels failed to parse: " + str(len(failed_to_parse)))
 
     # change label coords to mini space
@@ -68,14 +68,17 @@ def process_labels(paths, coords):
             label_df.at[ix, "coords"] = new_coords
 
     # find target panos -- they are the ones with the biggest bounding box an the house number
-    goal_panos = {}
-    for house_number in label_df[label_df.obj_type == "door"]["house_number"].unique():
+    doors = label_df[label_df.obj_type == "door"]
+    addresses = set([x.house_number + "-" + x.street_name for i, x in doors[["house_number", "street_name"]].iterrows()])
+
+    for address in addresses:
+        house_number, street_name = address.split("-")
         areas = []
-        matched_doors = label_df[(label_df.obj_type == "door") & (label_df.house_number == "6652")]
+        matched_doors = label_df[(label_df.obj_type == "door") & (label_df.house_number == house_number) & (label_df.street_name == street_name)]
         for coords in [x for x in matched_doors['coords'].values]:
             areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
         goal_pano = matched_doors.iloc[areas.index(max(areas))]
-        goal_panos[int(goal_pano.frame)] = goal_pano
+        label_df.at[goal_pano.name, "is_goal"] = True
     return label_df
 
 def construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges, path, mini_corl=False):
