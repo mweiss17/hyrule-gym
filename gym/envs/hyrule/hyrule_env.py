@@ -64,7 +64,8 @@ class HyruleEnv(gym.GoalEnv):
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
-        path = os.getcwd() + path
+        # path = os.getcwd() + path
+        path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym" + path
         f = gzip.GzipFile(path + "images.pkl.gz", "r")
         self.images_df = pickle.load(f)
         f.close()
@@ -159,13 +160,13 @@ class HyruleEnv(gym.GoalEnv):
             self.transition()
         elif action == self.Actions.DONE:
             done = True
-            reward = self.compute_reward(visible_text, self.desired_goal_num, {})
+            reward = self.compute_reward(visible_text, self.desired_goal_num, {}, done)
             print("Mission reward: " + str(reward))
         else:
             self.turn(action)
 
         if self.shaped_reward and action not in [self.Actions.DONE, self.Actions.NOOP]:
-            reward = self.compute_reward(visible_text, self.desired_goal_num, {})
+            reward = self.compute_reward(visible_text, self.desired_goal_num, {}, done)
             print("Current reward: " + str(reward))
 
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
@@ -280,7 +281,7 @@ class HyruleEnv(gym.GoalEnv):
         return actions
 
 
-    def compute_reward(self, visible_text, desired_goal, info):
+    def compute_reward(self, visible_text, desired_goal, info, done):
         """Compute the step reward. This externalizes the reward function and makes
         it dependent on an a desired goal and the one that was achieved. If you wish to include
         additional rewards that are independent of the goal, you can include the necessary values
@@ -298,7 +299,7 @@ class HyruleEnv(gym.GoalEnv):
                 ob, reward, done, info = env.step()
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
-        if self.shaped_reward:
+        if self.shaped_reward and not done:
             cur_spl = len(self.shortest_path_length())
             print("SPL:", cur_spl)
             return 1.0/cur_spl
