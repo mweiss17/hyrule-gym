@@ -55,7 +55,7 @@ class HyruleEnv(gym.GoalEnv):
         return res
 
     def convert_street_name(self, street_name):
-        res = self.label_df[self.label_df.obj_type == 'street_sign'].val.unique()
+        res = self.label_df[self.label_df.obj_type == 'street_sign'].street_name.unique()
         res = (res == street_name).astype(int)
         return res
 
@@ -106,32 +106,26 @@ class HyruleEnv(gym.GoalEnv):
             return angle
 
     def select_goal(self, difficulty=0, trajectory_curric=False):
-        pos = np.random.choice([x for x, y in self.G.nodes(data=True) if len(y['goals_achieved']) > 0])
-        goal_pos = self.G.nodes[pos]
-        goal_num = np.random.choice(self.G.nodes[pos]["goals_achieved"])
-        self.goal_id = goal_num
-        label = self.label_df[(self.label_df.frame == int(goal_pos['timestamp']*30)) & (self.label_df.val == str(goal_num))]
-        pano_rotation = self.norm_angle(self.coords_df.loc[pos].angle )
+        goals = self.label_df[self.label_df.is_goal == True]
+        goal = goals.loc[np.random.choice(goals.index.values.tolist())]
+        goal_idx = self.coords_df[self.coords_df.frame == goal.frame].index.values[0]
+        self.goal_id = goal.house_number
+        label = self.label_df[self.label_df.frame == int(self.coords_df.loc[goal_idx].frame)]
+        pano_rotation = self.norm_angle(self.coords_df.loc[goal_idx].angle )
         label_dir = self.norm_angle(360 * ((int(label["coords"].values[0][0]) + int(label["coords"].values[0][1])) / 2) / 224)
         goal_dir = self.norm_angle(-label_dir + pano_rotation)
 
-        # we adjust for the agent direction discritization
-        cur_pos = pos
-        cur_dir = label_dir
-        seen_poses = defaultdict(list)
-        seen_poses[1].append(str(cur_pos) + " : " + str(cur_dir))
-
         # randomly selects a node n-transitions from the goal node
         if difficulty == 0:
-            nodes = [pos]
+            nodes = [goal_idx]
         if difficulty >= 1:
-            nodes = set(nx.ego_graph(self.G, pos, radius=difficulty))
-            nodes -= set(nx.ego_graph(self.G, pos, radius=difficulty-1))
+            nodes = set(nx.ego_graph(self.G, goal_idx, radius=difficulty))
+            nodes -= set(nx.ego_graph(self.G, goal_idx, radius=difficulty-1))
         if self.curriculum_learning:
             self.agent_loc = np.random.choice(list(nodes))
             self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
-        goal_num = self.convert_house_numbers(goal_num)
-        return goal_pos, goal_num, goal_dir
+        goal_num = self.convert_house_numbers(goal.house_number)
+        return goal_idx, goal_num, goal_dir
 
 
     def transition(self):
@@ -174,7 +168,7 @@ class HyruleEnv(gym.GoalEnv):
 
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
-        obs = {"image": image, "mission": self.desired_goal_num, "rel_gps": rel_gps, "visible_text": visible_text}
+        obs = {"image": image, "mission": self.goal_house_num, "rel_gps": rel_gps, "visible_text": visible_text}
         self.num_steps_taken += 1
         if self.num_steps_taken >= self.max_num_steps and done == False:
             done = True
@@ -224,11 +218,11 @@ class HyruleEnv(gym.GoalEnv):
 
         for idx, row in pano_labels[pano_labels.obj_type == 'house_number'].iterrows():
             if x < row['coords'][0] and x+w > row['coords'][1]:
-                visible_text["house_numbers"].append(int(row["val"]))
+                visible_text["house_numbers"].append(int(row["house_number"]))
 
         for idx, row in pano_labels[pano_labels.obj_type == 'street_sign'].iterrows():
             if x < row['coords'][0] and x+w > row['coords'][1]:
-                visible_text["street_names"].append(self.convert_street_name(row["val"]))
+                visible_text["street_names"].append(self.convert_street_name(row["street_name"]))
 
         return visible_text
 
@@ -243,12 +237,12 @@ class HyruleEnv(gym.GoalEnv):
 
     def reset(self):
         self.num_steps_taken = 0
-        self.desired_goal_info, self.desired_goal_num, self.desired_goal_dir = self.select_goal(self.difficulty)
+        self.goal_idx, self.goal_house_num, self.goal_dir = self.select_goal(self.difficulty)
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
-        self.target_gps = self.sample_gps(self.coords_df[self.coords_df.timestamp == self.desired_goal_info['timestamp'].values[0]].iloc[0], scale=3.0)
+        self.target_gps = self.sample_gps(self.coords_df.loc[self.goal_idx], scale=3.0)
         image, x, w = self._get_image()
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
-        return {"image": image, "mission": self.desired_goal_num, "rel_gps": rel_gps, "visible_text": self.get_visible_text(x, w)}
+        return {"image": image, "mission": self.goal_house_num, "rel_gps": rel_gps, "visible_text": self.get_visible_text(x, w)}
 
     def angles_to_turn(self, cur, target):
         go_left = []
@@ -270,7 +264,7 @@ class HyruleEnv(gym.GoalEnv):
         # target_index = self.coords_df[self.coords_df.frame == int(target_node_info['timestamp'] * 30)].index.values[0]
         cur_node = self.agent_loc
         cur_dir = self.agent_dir + 180
-        target_node = self.desired_goal_info['angle'].index.values[0]
+        target_node = self.goal_idx
         path = nx.shortest_path(self.G, cur_node, target=target_node)
         actions = []
         for idx, node in enumerate(path):
@@ -281,7 +275,7 @@ class HyruleEnv(gym.GoalEnv):
                 cur_dir = target_dir
                 actions.append(self.Actions.FORWARD)
             else:
-                actions.extend(self.angles_to_turn(cur_dir, self.desired_goal_dir + 180))
+                actions.extend(self.angles_to_turn(cur_dir, self.goal_dir + 180))
                 actions.append(self.Actions.DONE)
         print(actions)
         return actions
