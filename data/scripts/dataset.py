@@ -43,10 +43,10 @@ def process_labels(paths, G, coords):
     if label_df.any().any():
         for ix, row in label_df.iterrows():
             row_coords = [int(x) for x in row["coords"]]
-            new_coords = (int(width * row_coords[0] / shape[1]),
-                          int(width * row_coords[1] / shape[1]),
-                          int((height - 2 * crop_margin) * row_coords[2] / shape[0]),
-                          int((height - 2 * crop_margin) * row_coords[3] / shape[0]))
+            new_coords = (int(width * row_coords[0] / shape[0]),
+                          int(width * row_coords[1] / shape[0]),
+                          int((height - 2 * crop_margin) * row_coords[2] / shape[1]),
+                          int((height - 2 * crop_margin) * row_coords[3] / shape[1]))
             label_df.at[ix, "coords"] = new_coords
 
     # find target panos -- they are the ones with the biggest bounding box an the house number
