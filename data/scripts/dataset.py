@@ -18,7 +18,7 @@ shape = (3840, 2160)
 crop_margin = int(height * (1/6))
 
 
-def process_labels(paths, G, coords):
+def process_labels(paths, coords):
     """ This function processes the labels into a nice format for the simulator"""
     labels = []
     failed_to_parse = []
@@ -76,15 +76,7 @@ def process_labels(paths, G, coords):
             areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
         goal_pano = matched_doors.iloc[areas.index(max(areas))]
         goal_panos[int(goal_pano.frame)] = goal_pano
-
-    for node in G.nodes:
-        G.nodes[node]['goals_achieved'] = []
-    for node in G.nodes:
-        frame = int(G.nodes[node]['timestamp'].values[0] * 30)
-        if frame in goal_panos.keys():
-            print("frame: " + str(frame) + ", node: " + str(node))
-            G.nodes[node]['goals_achieved'].append(int(goal_panos[frame]["val"]))
-    return label_df, G
+    return label_df
 
 def construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges, path, mini_corl=False):
     """ Filter the pano coordinates by spatial relation and write the filtered graph to disk"""
@@ -257,8 +249,7 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
     if do_labels:
         label_paths = [data_path + "raw/labels/pano_" + str(frame).zfill(6) + ".xml" for frame in coords_df["frame"].tolist()]
         label_paths = [path for path in label_paths if os.path.isfile(path)]
-        label_df, G = process_labels(label_paths, G, coords_df.frame.values.tolist())
+        label_df = process_labels(label_paths, coords_df.frame.values.tolist())
         label_df.to_hdf(data_path + "processed/labels.hdf5", key="df", index=False)
-        nx.write_gpickle(G, data_path + "processed/graph.pkl")
 
 create_dataset(data_path="/data/data/mini-corl/", do_images=False, do_labels=True, do_graph=True, do_plot=False, mini_corl=True)
