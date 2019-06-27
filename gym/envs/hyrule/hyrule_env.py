@@ -239,7 +239,8 @@ class HyruleEnv(gym.GoalEnv):
             y = y.values[0]
         x = x + np.random.normal(loc=0.0, scale=scale)
         y = y + np.random.normal(loc=0.0, scale=scale)
-        return (x, y)
+        gps_scale = 100.0
+        return (x/gps_scale, y/gps_scale)
 
     def reset(self):
         self.num_steps_taken = 0
