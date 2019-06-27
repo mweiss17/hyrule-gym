@@ -80,7 +80,7 @@ class HyruleEnv(gym.GoalEnv):
         self.weighted = True
 
         self.shaped_reward = shaped_reward
-        self.max_num_steps = 10000
+        self.max_num_steps = 500
         self.num_steps_taken = 0
 
     def turn(self, action):
@@ -178,8 +178,8 @@ class HyruleEnv(gym.GoalEnv):
             if k != "image":
                 s = s + ", " + str(k) + ": " + str(v)
         # print(self.agent_loc)
-        print(s)
-        print(obs)
+        # print(s)
+        # print(obs)
         return obs, reward, done, {}
 
 
@@ -214,8 +214,8 @@ class HyruleEnv(gym.GoalEnv):
     def get_visible_text(self, x, w):
         visible_text = {}
         pano_labels = self.label_df[self.label_df.frame == int(self.G.nodes[self.agent_loc]['timestamp'] * 30)]
-        if not pano_labels.any().any():
-            return visible_text
+        # if not pano_labels.any().any():
+        #     return visible_text
 
         house_numbers = []
         for idx, row in pano_labels[pano_labels.obj_type == 'house_number'].iterrows():
@@ -325,7 +325,7 @@ class HyruleEnv(gym.GoalEnv):
             if x < coords[0] and x + 84 > coords[1]:
                 is_facing_correct_dir = True
             if is_in_correct_pano and is_facing_correct_dir:
-                print("achieved goal")
+                #print("achieved goal")
                 return 1.0
         return 0.0
 
