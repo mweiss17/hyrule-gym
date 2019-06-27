@@ -64,8 +64,8 @@ class HyruleEnv(gym.GoalEnv):
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
-        # path = os.getcwd() + path
-        path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym" + path
+        path = os.getcwd() + path
+        #path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym" + path
         f = gzip.GzipFile(path + "images.pkl.gz", "r")
         self.images_df = pickle.load(f)
         f.close()
@@ -96,11 +96,14 @@ class HyruleEnv(gym.GoalEnv):
         self.agent_dir = self.norm_angle(self.agent_dir)
 
 
-    def get_angle_between_nodes(self, n1, n2):
+    def get_angle_between_nodes(self, n1, n2, use_agent_dir=True):
         x = self.G.nodes[n1]['coords'][0] - self.G.nodes[n2]['coords'][0]
         y = self.G.nodes[n1]['coords'][1] - self.G.nodes[n2]['coords'][1]
         angle = (math.atan2(y, x) * 180 / np.pi) + 180
-        return np.abs(self.norm_angle(angle - self.agent_dir))
+        if use_agent_dir:
+            return np.abs(self.norm_angle(angle - self.agent_dir))
+        else:
+            return angle
 
     def select_goal(self, difficulty=0, trajectory_curric=False):
         pos = np.random.choice([x for x, y in self.G.nodes(data=True) if len(y['goals_achieved']) > 0])
@@ -265,19 +268,19 @@ class HyruleEnv(gym.GoalEnv):
         # finds a minimal trajectory to navigate to the target pose
         # target_index = self.coords_df[self.coords_df.frame == int(target_node_info['timestamp'] * 30)].index.values[0]
         cur_node = self.agent_loc
-        cur_dir = self.agent_dir
+        cur_dir = self.agent_dir + 180
         target_node = self.desired_goal_info['angle'].index.values[0]
         path = nx.shortest_path(self.G, cur_node, target=target_node)
         actions = []
         for idx, node in enumerate(path):
+
             if idx + 1 != len(path):
-                target_dir = self.get_angle_between_nodes(node, path[idx])
-                print("cur_dir:" + str(cur_dir))
-                print("target_dir:" + str(target_dir))
-                actions.extend(self.angles_to_turn(cur_dir + 180, target_dir + 180))
+                target_dir = self.get_angle_between_nodes(node, path[idx + 1], use_agent_dir=False)
+                actions.extend(self.angles_to_turn(cur_dir, target_dir))
+                cur_dir = target_dir
                 actions.append(self.Actions.FORWARD)
             else:
-                actions.extend(self.angles_to_turn(cur_dir + 180, self.desired_goal_dir + 180))
+                actions.extend(self.angles_to_turn(cur_dir, self.desired_goal_dir + 180))
                 actions.append(self.Actions.DONE)
         print(actions)
         return actions
@@ -306,6 +309,7 @@ class HyruleEnv(gym.GoalEnv):
             print("SPL:", cur_spl)
             return 1.0/cur_spl
         else:
+            import pdb; pdb.set_trace()
             if desired_goal in visible_text["house_numbers"] and desired_goal in self.G.nodes[self.agent_loc]["goals_achieved"]:
                 print("achieved goal")
                 return 1.0
