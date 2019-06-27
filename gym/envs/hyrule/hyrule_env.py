@@ -223,7 +223,8 @@ class HyruleEnv(gym.GoalEnv):
                 house_numbers.append(self.convert_house_numbers(row["house_number"]))
         temp = np.zeros(120)
         if len(house_numbers) != 0:
-            temp[:120] = np.hstack(house_numbers)[:120]
+            nums = np.hstack(house_numbers)[:120]
+            temp[:nums.size] = nums
         visible_text["house_numbers"] = temp
 
         num_streets = self.label_df[self.label_df.obj_type == 'street_sign'].street_name.unique().size
@@ -233,7 +234,8 @@ class HyruleEnv(gym.GoalEnv):
                 street_signs.append(self.convert_street_name(row["street_name"]))
         temp = np.zeros(6)
         if len(street_signs) != 0:
-            temp[:6] =  np.hstack(street_signs)[:6]
+            nums = np.hstack(street_signs)[:6]
+            temp[:nums.size] = nums
         visible_text["street_names"] = temp
         return visible_text
 
@@ -316,6 +318,7 @@ class HyruleEnv(gym.GoalEnv):
             #print("SPL:", cur_spl)
             return 1.0/(2*cur_spl)
         else:
+            import pdb; pdb.set_trace()
             if self.goal_id in visible_text["house_numbers"] and self.goal_id in self.G.nodes[self.agent_loc]["goals_achieved"]:
                 #print("achieved goal")
                 return 1.0
