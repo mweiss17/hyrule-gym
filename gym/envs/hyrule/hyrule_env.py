@@ -269,8 +269,10 @@ class HyruleEnv(gym.GoalEnv):
         path = nx.shortest_path(self.G, cur_node, target=target_node)
         actions = []
         for idx, node in enumerate(path):
-            if not (idx + 1 == len(path)):
+            if idx + 1 != len(path):
                 target_dir = self.get_angle_between_nodes(node, path[idx])
+                print("cur_dir:" + str(cur_dir))
+                print("target_dir:" + str(target_dir))
                 actions.extend(self.angles_to_turn(cur_dir + 180, target_dir + 180))
                 actions.append(self.Actions.FORWARD)
             else:
