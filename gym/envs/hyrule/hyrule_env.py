@@ -105,7 +105,7 @@ class HyruleEnv(gym.GoalEnv):
         else:
             return angle
 
-    def select_goal(self, difficulty=0, trajectory_curric=False):
+    def select_goal(self, difficulty=0):
         goals = self.label_df[self.label_df.is_goal == True]
         goal = goals.loc[np.random.choice(goals.index.values.tolist())]
         goal_idx = self.coords_df[self.coords_df.frame == goal.frame].index.values[0]
@@ -178,7 +178,7 @@ class HyruleEnv(gym.GoalEnv):
             if k != "image":
                 s = s + ", " + str(k) + ": " + str(v)
         # print(self.agent_loc)
-        # print(s)
+        print(s)
         return obs, reward, done, {}
 
 
@@ -277,7 +277,7 @@ class HyruleEnv(gym.GoalEnv):
             else:
                 actions.extend(self.angles_to_turn(cur_dir, self.goal_dir + 180))
                 actions.append(self.Actions.DONE)
-        print(actions)
+        # print(actions)
         return actions
 
 
