@@ -49,9 +49,9 @@ class HyruleEnv(gym.GoalEnv):
 
     @classmethod
     def convert_house_numbers(cls, num):
-        res = np.zeros((10, 4))
+        res = np.zeros((4, 10))
         for col, row in enumerate(str(num)):
-            res[int(row), col] = 1
+            res[col, int(row)] = 1
         return res
 
     def convert_street_name(self, street_name):
@@ -64,8 +64,8 @@ class HyruleEnv(gym.GoalEnv):
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
-        path = os.getcwd() + path
-        #path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym" + path
+        #path = os.getcwd() + path
+        path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym" + path
         f = gzip.GzipFile(path + "images.pkl.gz", "r")
         self.images_df = pickle.load(f)
         f.close()
@@ -73,7 +73,7 @@ class HyruleEnv(gym.GoalEnv):
         self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
 
-        self.curriculum_learning = True
+        self.curriculum_learning = False
         self.agent_loc = 191 #np.random.choice(self.coords_df.index)
         self.agent_dir = 0
         self.difficulty = 0
@@ -158,13 +158,13 @@ class HyruleEnv(gym.GoalEnv):
         elif action == self.Actions.DONE:
             done = True
             reward = self.compute_reward(visible_text, {}, done)
-            print("Mission reward: " + str(reward))
+            #print("Mission reward: " + str(reward))
         else:
             self.turn(action)
 
         if self.shaped_reward and action not in [self.Actions.DONE, self.Actions.NOOP]:
             reward = self.compute_reward(visible_text, {}, done)
-            print("Current reward: " + str(reward))
+            #print("Current reward: " + str(reward))
 
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
@@ -233,7 +233,8 @@ class HyruleEnv(gym.GoalEnv):
             y = y.values[0]
         x = x + np.random.normal(loc=0.0, scale=scale)
         y = y + np.random.normal(loc=0.0, scale=scale)
-        return (x, y)
+        gps_scale = 100.0  # TODO: Arbitrary. Need a better normalizing value here. Requires min-max from dataframe.
+        return (x/gps_scale, y/gps_scale)
 
     def reset(self):
         self.num_steps_taken = 0
@@ -301,11 +302,11 @@ class HyruleEnv(gym.GoalEnv):
         """
         if self.shaped_reward and not done:
             cur_spl = len(self.shortest_path_length())
-            print("SPL:", cur_spl)
+            #print("SPL:", cur_spl)
             return 1.0/cur_spl
         else:
             if self.goal_id in visible_text["house_numbers"] and self.goal_id in self.G.nodes[self.agent_loc]["goals_achieved"]:
-                print("achieved goal")
+                #print("achieved goal")
                 return 1.0
         return 0.0
 
