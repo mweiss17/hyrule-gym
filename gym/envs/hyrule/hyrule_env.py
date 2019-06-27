@@ -239,7 +239,7 @@ class HyruleEnv(gym.GoalEnv):
             y = y.values[0]
         x = x + np.random.normal(loc=0.0, scale=scale)
         y = y + np.random.normal(loc=0.0, scale=scale)
-        gps_scale = 100.0
+        gps_scale = 100.0  # TODO: Arbitrary. Need a better normalizing value here. Requires min-max from dataframe.
         return (x/gps_scale, y/gps_scale)
 
     def reset(self):
