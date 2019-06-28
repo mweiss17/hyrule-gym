@@ -129,7 +129,9 @@ class HyruleEnv(gym.GoalEnv):
                 self.agent_dir = (int(goal_dir/22.5)-np.random.choice(range(-difficulty, difficulty)))*22.5
             else:
                 self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
-        goal_address = np.append(self.convert_house_numbers(goal.house_number),  self.convert_street_name(goal.street_name))
+        #goal_address = np.append(self.convert_house_numbers(goal.house_number),  self.convert_street_name(goal.street_name))
+        goal_address = {"house_numbers": self.convert_house_numbers(goal.house_number),
+                        "street_names": self.convert_street_name(goal.street_name)}
         return goal_idx, goal_address, goal_dir
 
 
