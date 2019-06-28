@@ -338,7 +338,7 @@ class HyruleEnv(gym.GoalEnv):
             else:
                 reward = 0.0
             self.prev_spl = cur_spl
-            print(reward)
+            print("reward: " + str(reward))
             return reward
         if self.is_successful_trajectory(x):
             return 1.0
