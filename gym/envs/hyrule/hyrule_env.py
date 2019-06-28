@@ -116,14 +116,19 @@ class HyruleEnv(gym.GoalEnv):
         goal_dir = self.norm_angle(-label_dir + pano_rotation)
 
         # randomly selects a node n-transitions from the goal node
-        if difficulty == 0:
+        if int(difficulty/4) == 0:
             nodes = [goal_idx]
-        if difficulty >= 1:
+        if int(difficulty/4) >= 1:
             nodes = set(nx.ego_graph(self.G, goal_idx, radius=difficulty))
             nodes -= set(nx.ego_graph(self.G, goal_idx, radius=difficulty-1))
         if self.curriculum_learning:
             self.agent_loc = np.random.choice(list(nodes))
-            self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
+            if difficulty == 0:
+                self.agent_dir = int(goal_dir/22.5)*22.5
+            elif difficulty <=3:
+                self.agent_dir = (int(goal_dir/22.5)-np.random.choice(range(-difficulty, difficulty)))*22.5
+            else:
+                self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
         goal_address = np.append(self.convert_house_numbers(goal.house_number),  self.convert_street_name(goal.street_name))
         return goal_idx, goal_address, goal_dir
 
@@ -291,7 +296,7 @@ class HyruleEnv(gym.GoalEnv):
             else:
                 actions.extend(self.angles_to_turn(cur_dir, self.goal_dir + 180))
                 actions.append(self.Actions.DONE)
-        # print(actions)
+        # print("SPL:", len(actions))
         return actions
 
 
