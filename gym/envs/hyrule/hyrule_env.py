@@ -111,6 +111,7 @@ class HyruleEnv(gym.GoalEnv):
         goal_idx = self.coords_df[self.coords_df.frame == goal.frame].index.values[0]
         self.goal_id = goal.house_number
         label = self.label_df[self.label_df.frame == int(self.coords_df.loc[goal_idx].frame)]
+        label = label[label.is_goal]
         pano_rotation = self.norm_angle(self.coords_df.loc[goal_idx].angle )
         label_dir = self.norm_angle(360 * ((int(label["coords"].values[0][0]) + int(label["coords"].values[0][1])) / 2) / 224)
         goal_dir = self.norm_angle(-label_dir + pano_rotation)
