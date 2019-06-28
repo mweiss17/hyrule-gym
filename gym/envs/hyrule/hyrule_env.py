@@ -166,7 +166,7 @@ class HyruleEnv(gym.GoalEnv):
         elif action == self.Actions.DONE:
             done = True
             reward = self.compute_reward(x, {}, done)
-            #print("Mission reward: " + str(reward))
+            print("Mission reward: " + str(reward))
         else:
             self.turn(action)
 
@@ -193,8 +193,10 @@ class HyruleEnv(gym.GoalEnv):
 
     def _get_image(self, high_res=False, plot=False):
         if high_res:
-            img = cv2.imread(filename=self.path + "/panos/pano_"+ str(self.agent_loc).zfill(6) + ".png")[:, :, ::-1]
-            obs_shape = (1024, 1024, 3)
+        	#img = cv2.imread(filename=self.path + "/panos/pano_"+ str(self.agent_loc).zfill(6) + ".png")[:, :, ::-1]
+            path = "data/data/mini-corl/panos/pano_"+ str(int(30*self.G.nodes[self.agent_loc]['timestamp'])).zfill(6) + ".png"
+            img = cv2.resize(cv2.imread(path)[:, :, ::-1], (960, 480))
+            obs_shape = (480, 480, 3)
         else:
             img = self.images_df[self.coords_df.loc[self.agent_loc].frame]
             obs_shape = self.observation_space.shape
@@ -260,6 +262,7 @@ class HyruleEnv(gym.GoalEnv):
     def reset(self):
         self.num_steps_taken = 0
         self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(self.difficulty)
+        self.prev_spl = len(self.shortest_path_length())
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.coords_df.loc[self.goal_idx], scale=3.0)
         image, x, w = self._get_image()
@@ -321,21 +324,36 @@ class HyruleEnv(gym.GoalEnv):
                 ob, reward, done, info = env.step()
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
-        if self.shaped_reward and not done:
+        if self.shaped_reward:
             cur_spl = len(self.shortest_path_length())
-            #print("SPL:", cur_spl)
-            return 1.0/(2*cur_spl)
-        else:
-            label = self.label_df[(self.label_df.frame == self.coords_df.loc[self.goal_idx].frame) & (self.label_df.obj_type == "door") & (self.label_df.house_number == self.goal_id)]
-            is_in_correct_pano = (label.frame == int(self.coords_df.loc[self.agent_loc].frame)).values[0]
-            is_facing_correct_dir = False
-            coords = label.coords.values[0]
-            if x < coords[0] and x + 84 > coords[1]:
-                is_facing_correct_dir = True
-            if is_in_correct_pano and is_facing_correct_dir:
-                #print("achieved goal")
-                return 1.0
+            print("SPL:", cur_spl)
+            if done and self.is_successful_trajectory(x):
+                reward = 2.0
+            elif done and not self.is_successful_trajectory(x):
+                reward = -2.0
+            elif self.prev_spl - cur_spl == 1:
+                reward = 0.5
+            elif self.prev_spl - cur_spl == -1:
+                reward = -0.5
+            else:
+                reward = 0.0
+            self.prev_spl = cur_spl
+            print(reward)
+            return reward
+        if self.is_successful_trajectory(x):
+            return 1.0
         return 0.0
+
+    def is_successful_trajectory(self, x):
+        label = self.label_df[(self.label_df.frame == self.coords_df.loc[self.goal_idx].frame) & (self.label_df.obj_type == "door") & (self.label_df.house_number == self.goal_id)]
+        is_in_correct_pano = (label.frame == int(self.coords_df.loc[self.agent_loc].frame)).values[0]
+        is_facing_correct_dir = False
+        coords = label.coords.values[0]
+        if x < coords[0] and x + 84 > coords[1]:
+            is_facing_correct_dir = True
+        if is_in_correct_pano and is_facing_correct_dir:
+            #print("achieved goal")
+            return 1.0
 
     def render(self, mode='human'):
         img, x, w = self._get_image()
