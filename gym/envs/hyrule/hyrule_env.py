@@ -80,7 +80,7 @@ class HyruleEnv(gym.GoalEnv):
         self.weighted = True
 
         self.shaped_reward = shaped_reward
-        self.max_num_steps = 10000
+        self.max_num_steps = 500
         self.num_steps_taken = 0
 
     def turn(self, action):
@@ -120,20 +120,28 @@ class HyruleEnv(gym.GoalEnv):
         goal_idx = self.coords_df[self.coords_df.frame == goal.frame].index.values[0]
         self.goal_id = goal.house_number
         label = self.label_df[self.label_df.frame == int(self.coords_df.loc[goal_idx].frame)]
+        label = label[label.is_goal]
         pano_rotation = self.norm_angle(self.coords_df.loc[goal_idx].angle )
         label_dir = self.norm_angle(360 * ((int(label["coords"].values[0][0]) + int(label["coords"].values[0][1])) / 2) / 224)
         goal_dir = self.norm_angle(-label_dir + pano_rotation)
 
         # randomly selects a node n-transitions from the goal node
-        if difficulty == 0:
+        if int(difficulty/4) == 0:
             nodes = [goal_idx]
-        if difficulty >= 1:
+        if int(difficulty/4) >= 1:
             nodes = set(nx.ego_graph(G, goal_idx, radius=difficulty))
             nodes -= set(nx.ego_graph(G, goal_idx, radius=difficulty-1))
         if self.curriculum_learning:
             self.agent_loc = np.random.choice(list(nodes))
-            self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
-        goal_address = np.append(self.convert_house_numbers(goal.house_number),  self.convert_street_name(goal.street_name))
+            if difficulty == 0:
+                self.agent_dir = int(goal_dir/22.5)*22.5
+            elif difficulty <=3:
+                self.agent_dir = (int(goal_dir/22.5)-np.random.choice(range(-difficulty, difficulty)))*22.5
+            else:
+                self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
+        #goal_address = np.append(self.convert_house_numbers(goal.house_number),  self.convert_street_name(goal.street_name))
+        goal_address = {"house_numbers": self.convert_house_numbers(goal.house_number),
+                        "street_names": self.convert_street_name(goal.street_name)}
         return goal_idx, goal_address, goal_dir
 
 
@@ -167,7 +175,7 @@ class HyruleEnv(gym.GoalEnv):
         elif action == self.Actions.DONE:
             done = True
             reward = self.compute_reward(x, {}, done)
-            #print("Mission reward: " + str(reward))
+            print("Mission reward: " + str(reward))
         else:
             self.turn(action)
 
@@ -194,8 +202,10 @@ class HyruleEnv(gym.GoalEnv):
 
     def _get_image(self, high_res=False, plot=False):
         if high_res:
-            img = cv2.imread(filename=self.path + "/panos/pano_"+ str(self.agent_loc).zfill(6) + ".png")[:, :, ::-1]
-            obs_shape = (1024, 1024, 3)
+        	#img = cv2.imread(filename=self.path + "/panos/pano_"+ str(self.agent_loc).zfill(6) + ".png")[:, :, ::-1]
+            path = "data/data/mini-corl/panos/pano_"+ str(int(30*self.G.nodes[self.agent_loc]['timestamp'])).zfill(6) + ".png"
+            img = cv2.resize(cv2.imread(path)[:, :, ::-1], (960, 480))
+            obs_shape = (480, 480, 3)
         else:
             img = self.images_df[self.coords_df.loc[self.agent_loc].frame]
             obs_shape = self.observation_space.shape
@@ -223,8 +233,8 @@ class HyruleEnv(gym.GoalEnv):
     def get_visible_text(self, x, w):
         visible_text = {}
         pano_labels = self.label_df[self.label_df.frame == int(self.G.nodes[self.agent_loc]['timestamp'] * 30)]
-        if not pano_labels.any().any():
-            return visible_text
+        # if not pano_labels.any().any():
+        #     return visible_text
 
         house_numbers = []
         for idx, row in pano_labels[pano_labels.obj_type == 'house_number'].iterrows():
@@ -260,7 +270,12 @@ class HyruleEnv(gym.GoalEnv):
 
     def reset(self):
         self.num_steps_taken = 0
+<<<<<<< HEAD
         self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(same_segment=True, difficulty=self.difficulty)
+=======
+        self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(self.difficulty)
+        self.prev_spl = len(self.shortest_path_length())
+>>>>>>> 1a9a171b9cd7ef70e5d56da0cf56ef7bc80fd40d
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.coords_df.loc[self.goal_idx], scale=3.0)
         image, x, w = self._get_image()
@@ -300,7 +315,7 @@ class HyruleEnv(gym.GoalEnv):
             else:
                 actions.extend(self.angles_to_turn(cur_dir, self.goal_dir + 180))
                 actions.append(self.Actions.DONE)
-        # print(actions)
+        # print("SPL:", len(actions))
         return actions
 
 
@@ -322,8 +337,9 @@ class HyruleEnv(gym.GoalEnv):
                 ob, reward, done, info = env.step()
                 assert reward == env.compute_reward(ob['achieved_goal'], ob['goal'], info)
         """
-        if self.shaped_reward and not done:
+        if self.shaped_reward:
             cur_spl = len(self.shortest_path_length())
+<<<<<<< HEAD
             print(cur_spl)
             #print("SPL:", cur_spl)
             return 1.0/(2*cur_spl)
@@ -337,7 +353,36 @@ class HyruleEnv(gym.GoalEnv):
             if is_in_correct_pano and is_facing_correct_dir:
                 print("achieved goal")
                 return 1.0
+=======
+            print("SPL:", cur_spl)
+            if done and self.is_successful_trajectory(x):
+                reward = 2.0
+            elif done and not self.is_successful_trajectory(x):
+                reward = -2.0
+            elif self.prev_spl - cur_spl == 1:
+                reward = 0.5
+            elif self.prev_spl - cur_spl == -1:
+                reward = -0.5
+            else:
+                reward = 0.0
+            self.prev_spl = cur_spl
+            print("reward: " + str(reward))
+            return reward
+        if self.is_successful_trajectory(x):
+            return 1.0
+>>>>>>> 1a9a171b9cd7ef70e5d56da0cf56ef7bc80fd40d
         return 0.0
+
+    def is_successful_trajectory(self, x):
+        label = self.label_df[(self.label_df.frame == self.coords_df.loc[self.goal_idx].frame) & (self.label_df.obj_type == "door") & (self.label_df.house_number == self.goal_id)]
+        is_in_correct_pano = (label.frame == int(self.coords_df.loc[self.agent_loc].frame)).values[0]
+        is_facing_correct_dir = False
+        coords = label.coords.values[0]
+        if x < coords[0] and x + 84 > coords[1]:
+            is_facing_correct_dir = True
+        if is_in_correct_pano and is_facing_correct_dir:
+            #print("achieved goal")
+            return 1.0
 
     def render(self, mode='human'):
         img, x, w = self._get_image()

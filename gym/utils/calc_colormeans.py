@@ -1,26 +1,31 @@
-import pandas as pd
 import numpy as np
-
+import gzip
+import pickle
+import os
+import matplotlib.pyplot as plt
 '''
 Script that runs on panos directly to obtain the mean and standard deviation of the color channels in 
 the dataset.
 '''
 
 region = "saint-urbain"
-path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/"
-data_df = pd.read_hdf(path + "hyrule-gym/data/" + region + "/processed/data.hdf5", key='df', mode='r')
+path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym/data/data/mini-corl/processed/images.pkl.gz"
+#path = os.path.expanduser(
+#    "~/dev/hyrule-gym/data/data/mini-corl/processed/images.pkl.gz")
+# data_df = pd.read_hdf(path + "hyrule-gym/data/" + region + "/processed/data.hdf5", key='df', mode='r')
 
-r_means = []
-g_means = []
-b_means = []
-df_indices = data_df.index.values.tolist()
-for i in df_indices:
-    img = data_df.loc[i]['thumbnail'] / 250.0
-    r_means.append(np.mean(img[:, :, 0]))
-    g_means.append(np.mean(img[:, :, 1]))
-    b_means.append(np.mean(img[:, :, 2]))
+f = gzip.GzipFile(path, "r")
+images_df = np.array(list(pickle.load(f).values())).astype(np.uint8)
 
-# Note: I am assuming that this is the right order. TO be confirmed.
-print("Red mean:", np.mean(r_means), "StD:", np.std(r_means))
-print("Green mean:", np.mean(g_means), "StD:", np.std(g_means))
-print("Blue mean:", np.mean(b_means), "StD:", np.std(b_means))
+# just an example to check that the data is okay
+print(images_df.shape)
+plt.imshow(images_df[1])
+plt.show()
+
+images = images_df.astype(np.float) / 255
+
+# we don't need to iterate if we use numpy arrays
+print(
+    f"Red mean: {images[:,:,:,0].mean()} StD: {images[:,:,:,0].std()} \n"
+    f"Green mean: {images[:,:,:,1].mean()} StD: {images[:,:,:,1].std()} \n"
+    f"Blue mean: {images[:,:,:,2].mean()} StD: {images[:,:,:,2].std()} ")
