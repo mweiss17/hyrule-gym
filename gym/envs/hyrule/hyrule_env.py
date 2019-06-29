@@ -66,6 +66,7 @@ class HyruleEnv(gym.GoalEnv):
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
         path = os.getcwd() + path
         #path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym" + path
+        path = "/home/martinweiss/hyrule-gym/data/data/mini-corl/processed/" 
         f = gzip.GzipFile(path + "images.pkl.gz", "r")
         self.images_df = pickle.load(f)
         f.close()
