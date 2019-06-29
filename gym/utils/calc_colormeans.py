@@ -9,9 +9,9 @@ the dataset.
 '''
 
 region = "saint-urbain"
-# path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym/data/data/mini-corl/processed/"
-path = os.path.expanduser(
-    "~/dev/hyrule-gym/data/data/mini-corl/processed/images.pkl.gz")
+path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym/data/data/mini-corl/processed/images.pkl.gz"
+#path = os.path.expanduser(
+#    "~/dev/hyrule-gym/data/data/mini-corl/processed/images.pkl.gz")
 # data_df = pd.read_hdf(path + "hyrule-gym/data/" + region + "/processed/data.hdf5", key='df', mode='r')
 
 f = gzip.GzipFile(path, "r")
