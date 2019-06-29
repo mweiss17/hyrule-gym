@@ -76,7 +76,7 @@ class HyruleEnv(gym.GoalEnv):
         self.curriculum_learning = True
         self.agent_loc = 191 #np.random.choice(self.coords_df.index)
         self.agent_dir = 0
-        self.difficulty = 0
+        self.difficulty = 10
         self.weighted = True
 
         self.shaped_reward = shaped_reward
@@ -105,9 +105,18 @@ class HyruleEnv(gym.GoalEnv):
         else:
             return angle
 
-    def select_goal(self, difficulty=0):
+    def select_goal(self, same_segment=True, difficulty=0):
         goals = self.label_df[self.label_df.is_goal == True]
-        goal = goals.loc[np.random.choice(goals.index.values.tolist())]
+        G = self.G.copy()
+        if same_segment:
+            frames = self.coords_df[(self.coords_df.type == "street_segment") & self.coords_df.frame.isin(goals.frame)].frame
+            goals_on_street_segment = goals[goals.frame.isin(frames)]
+            goal = goals_on_street_segment.loc[np.random.choice(goals_on_street_segment.index.values.tolist())]
+            segment_group = self.coords_df[self.coords_df.frame == goal.frame].group.iloc[0]
+            segment_panos = self.coords_df[(self.coords_df.group == segment_group) & (self.coords_df.type == "street_segment")]
+            G.remove_nodes_from(self.coords_df[~self.coords_df.index.isin(segment_panos.index)].index)
+        else:
+            goal = goals.loc[np.random.choice(goals.index.values.tolist())]
         goal_idx = self.coords_df[self.coords_df.frame == goal.frame].index.values[0]
         self.goal_id = goal.house_number
         label = self.label_df[self.label_df.frame == int(self.coords_df.loc[goal_idx].frame)]
@@ -119,8 +128,8 @@ class HyruleEnv(gym.GoalEnv):
         if difficulty == 0:
             nodes = [goal_idx]
         if difficulty >= 1:
-            nodes = set(nx.ego_graph(self.G, goal_idx, radius=difficulty))
-            nodes -= set(nx.ego_graph(self.G, goal_idx, radius=difficulty-1))
+            nodes = set(nx.ego_graph(G, goal_idx, radius=difficulty))
+            nodes -= set(nx.ego_graph(G, goal_idx, radius=difficulty-1))
         if self.curriculum_learning:
             self.agent_loc = np.random.choice(list(nodes))
             self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
@@ -178,8 +187,8 @@ class HyruleEnv(gym.GoalEnv):
             if k != "image":
                 s = s + ", " + str(k) + ": " + str(v)
         # print(self.agent_loc)
-        print(s)
-        print(obs)
+        # print(s)
+        # print(obs)
         return obs, reward, done, {}
 
 
@@ -251,7 +260,7 @@ class HyruleEnv(gym.GoalEnv):
 
     def reset(self):
         self.num_steps_taken = 0
-        self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(self.difficulty)
+        self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(same_segment=True, difficulty=self.difficulty)
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.coords_df.loc[self.goal_idx], scale=3.0)
         image, x, w = self._get_image()
@@ -315,6 +324,7 @@ class HyruleEnv(gym.GoalEnv):
         """
         if self.shaped_reward and not done:
             cur_spl = len(self.shortest_path_length())
+            print(cur_spl)
             #print("SPL:", cur_spl)
             return 1.0/(2*cur_spl)
         else:
