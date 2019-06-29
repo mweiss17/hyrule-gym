@@ -203,6 +203,25 @@ def construct_graph_cleanup(mini_corl=False):
 
     return node_blacklist, edge_blacklist, add_edges
 
+def label_segments(coords_df):
+    coords_df["type"] = None
+    coords_df["group"] = None
+    street_segments = [(25.3, 30.5, -113, -1.8), (33, 38, -113.25, -2.5), (62, 66, -115.8, -3.39), (68.7, 76, -116, -4), (35, 63.2, -125, -121), (37, 62.5, -116.8, -115.1), (38.3, 62.2, -3.3, -0.8), (35.75, 62.5, 4.8, 6.6)]
+    intersections = [(25.4, 35, -123.5, -113.25), (61.6, 73.6, -124.5, -116), (26.38, 38.23, -1.9, 6.8), (62.3, 72.2, -3.5, 6.2)]
+
+    for idx, box in enumerate(street_segments):
+        segment = coords_df[((coords_df.x > box[0]) & (coords_df.x < box[1]) & (coords_df.y > box[2]) & (coords_df.y < box[3]))]
+        segment["type"] = "street_segment"
+        segment["group"] = idx
+        coords_df.loc[segment.index] = segment
+
+    for idx, box in enumerate(intersections):
+        intersection = coords_df[((coords_df.x > box[0]) & (coords_df.x < box[1]) & (coords_df.y > box[2]) & (coords_df.y < box[3]))]
+        intersection["type"] = "intersection"
+        intersection["group"] = idx
+        coords_df.loc[intersection.index] = intersection
+    return coords_df
+
 def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True, do_graph=True, do_plot=False, limit=None, mini_corl=False):
     """
     Loads in the pano images from disk, crops them, resizes them, and writes them to disk.
@@ -219,6 +238,7 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
         node_blacklist, edge_blacklist, add_edges = construct_graph_cleanup(mini_corl)
 
         G, coords_df = construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges, data_path, mini_corl)
+        coords_df = label_segments(coords_df)
         coords_df.to_hdf(data_path + "processed/coords.hdf5", key='df')
         if do_plot:
             pos = {k: v.get("coords")[0:2] for k, v in G.nodes(data=True)}
