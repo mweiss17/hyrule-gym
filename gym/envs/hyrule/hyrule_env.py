@@ -131,10 +131,10 @@ class HyruleEnv(gym.GoalEnv):
         if int(difficulty/4) == 0:
             nodes = [goal_idx]
         if int(difficulty/4) >= 1:
-            nodes = set(nx.ego_graph(G, goal_idx, radius=difficulty))
-            nodes -= set(nx.ego_graph(G, goal_idx, radius=difficulty-1))
+            nodes = set(nx.ego_graph(G, goal_idx, radius=int(difficulty/4)))
+            nodes -= set(nx.ego_graph(G, goal_idx, radius=int(difficulty-1 / 4)))
         if self.curriculum_learning:
-            self.agent_loc = np.random.choice(list(nodes))
+            self.agent_loc = np.random.choice(list(nodes)) if len(list(nodes)) > 0 else np.random.choice(list(G.nodes))
             if difficulty == 0:
                 self.agent_dir = int(goal_dir/22.5)*22.5
             elif difficulty <=3:
