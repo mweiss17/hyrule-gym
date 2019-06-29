@@ -335,21 +335,6 @@ class HyruleEnv(gym.GoalEnv):
         """
         if self.shaped_reward:
             cur_spl = len(self.shortest_path_length())
-<<<<<<< HEAD
-            print(cur_spl)
-            #print("SPL:", cur_spl)
-            return 1.0/(2*cur_spl)
-        else:
-            label = self.label_df[(self.label_df.frame == self.coords_df.loc[self.goal_idx].frame) & (self.label_df.obj_type == "door") & (self.label_df.house_number == self.goal_id)]
-            is_in_correct_pano = (label.frame == int(self.coords_df.loc[self.agent_loc].frame)).values[0]
-            is_facing_correct_dir = False
-            coords = label.coords.values[0]
-            if x < coords[0] and x + 84 > coords[1]:
-                is_facing_correct_dir = True
-            if is_in_correct_pano and is_facing_correct_dir:
-                print("achieved goal")
-                return 1.0
-=======
             print("SPL:", cur_spl)
             if done and self.is_successful_trajectory(x):
                 reward = 2.0
@@ -366,7 +351,6 @@ class HyruleEnv(gym.GoalEnv):
             return reward
         if self.is_successful_trajectory(x):
             return 1.0
->>>>>>> 1a9a171b9cd7ef70e5d56da0cf56ef7bc80fd40d
         return 0.0
 
     def is_successful_trajectory(self, x):
