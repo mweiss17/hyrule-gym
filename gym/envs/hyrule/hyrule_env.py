@@ -64,9 +64,10 @@ class HyruleEnv(gym.GoalEnv):
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
-        path = os.getcwd() + path
+        #path = os.getcwd() + path
         #path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym" + path
         path = "/home/martinweiss/hyrule-gym/data/data/mini-corl/processed/" 
+        #path = "/Users/martinweiss/code/academic/hyrule-gym" + path
         f = gzip.GzipFile(path + "images.pkl.gz", "r")
         self.images_df = pickle.load(f)
         f.close()
@@ -336,20 +337,17 @@ class HyruleEnv(gym.GoalEnv):
         """
         if self.shaped_reward:
             cur_spl = len(self.shortest_path_length())
-            print("SPL:", cur_spl)
+            # print("SPL:", cur_spl)
             if done and self.is_successful_trajectory(x):
-                reward = 2.0
+               reward = 2.0
             elif done and not self.is_successful_trajectory(x):
-                reward = -2.0
+               reward = -2.0
             elif self.prev_spl - cur_spl == 1:
-                reward = 0.5
-            elif self.prev_spl - cur_spl == -1:
-                reward = -0.5
+               reward = -10.5
+            elif self.prev_spl - cur_spl <= 0:
+               reward = -10.5
             else:
-                reward = 0.0
-            self.prev_spl = cur_spl
-            print("reward: " + str(reward))
-            return reward
+               reward = 0.0
         if self.is_successful_trajectory(x):
             return 1.0
         return 0.0
