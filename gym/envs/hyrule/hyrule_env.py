@@ -270,12 +270,8 @@ class HyruleEnv(gym.GoalEnv):
 
     def reset(self):
         self.num_steps_taken = 0
-<<<<<<< HEAD
         self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(same_segment=True, difficulty=self.difficulty)
-=======
-        self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(self.difficulty)
         self.prev_spl = len(self.shortest_path_length())
->>>>>>> 1a9a171b9cd7ef70e5d56da0cf56ef7bc80fd40d
         self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.coords_df.loc[self.goal_idx], scale=3.0)
         image, x, w = self._get_image()
