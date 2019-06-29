@@ -175,7 +175,7 @@ class HyruleEnv(gym.GoalEnv):
         elif action == self.Actions.DONE:
             done = True
             reward = self.compute_reward(x, {}, done)
-            print("Mission reward: " + str(reward))
+            # print("Mission reward: " + str(reward))
         else:
             self.turn(action)
 
@@ -335,19 +335,19 @@ class HyruleEnv(gym.GoalEnv):
         """
         if self.shaped_reward:
             cur_spl = len(self.shortest_path_length())
-            print("SPL:", cur_spl)
+            # print("SPL:", cur_spl)
             if done and self.is_successful_trajectory(x):
                 reward = 2.0
             elif done and not self.is_successful_trajectory(x):
                 reward = -2.0
             elif self.prev_spl - cur_spl == 1:
-                reward = 0.5
-            elif self.prev_spl - cur_spl == -1:
-                reward = -0.5
+                reward = -10.5
+            elif self.prev_spl - cur_spl <= 0:
+                reward = -10.5
             else:
                 reward = 0.0
             self.prev_spl = cur_spl
-            print("reward: " + str(reward))
+            # print("reward: " + str(reward))
             return reward
         if self.is_successful_trajectory(x):
             return 1.0
