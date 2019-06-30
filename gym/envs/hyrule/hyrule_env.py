@@ -23,8 +23,7 @@ ACTION_MEANING = {
     2: 'FORWARD',
     3: 'RIGHT_SMALL',
     4: 'RIGHT_BIG',
-    5: 'NOOP',
-    6: 'DONE'
+    5: 'DONE'
 }
 
 class HyruleEnv(gym.GoalEnv):
@@ -36,8 +35,7 @@ class HyruleEnv(gym.GoalEnv):
         FORWARD = 2
         RIGHT_SMALL = 3
         RIGHT_BIG = 4
-        NOOP = 5
-        DONE = 6
+        DONE = 5
 
     @classmethod
     def norm_angle(cls, x):
@@ -73,8 +71,8 @@ class HyruleEnv(gym.GoalEnv):
         self.images_df = pickle.load(f)
         f.close()
         self.meta_df = pd.read_hdf(path + "meta.hdf5", key='df', mode='r')
-        # self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
+
         self.num_streets = self.meta_df[self.meta_df.obj_type == 'street_sign'].street_name.unique().size
         self.curriculum_learning = True
         self.agent_loc = np.random.choice(self.meta_df.frame)
@@ -157,7 +155,7 @@ class HyruleEnv(gym.GoalEnv):
             neighbors[n] = self.get_angle_between_nodes(n, self.agent_loc)
 
         if neighbors[min(neighbors, key=neighbors.get)] > 45:
-            return # noop
+            return 
 
         self.agent_loc = min(neighbors, key=neighbors.get)
 
@@ -169,7 +167,6 @@ class HyruleEnv(gym.GoalEnv):
         done = False
         reward = 0.0
         action = self._action_set(a)
-        start = time.time()
         image, x, w = self._get_image()
         start = time.time()
         visible_text = self.get_visible_text(x, w)
@@ -183,7 +180,7 @@ class HyruleEnv(gym.GoalEnv):
         else:
             self.turn(action)
 
-        if self.shaped_reward and action not in [self.Actions.DONE, self.Actions.NOOP]:
+        if self.shaped_reward and action != self.Actions.DONE:
             reward = self.compute_reward(x, {}, done)
             #print("Current reward: " + str(reward))
         self.agent_gps = self.sample_gps(self.meta_df.loc[self.agent_loc])
@@ -386,7 +383,6 @@ class HyruleEnv(gym.GoalEnv):
             'RIGHT_SMALL': ord('e'),
             'RIGHT_BIG': ord('d'),
             'DONE': ord('s'),
-            'NOOP': ord('n'),
         }
 
         keys_to_action = {}
