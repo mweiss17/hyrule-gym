@@ -18,7 +18,7 @@ shape = (3840, 2160)
 crop_margin = int(height * (1/6))
 
 
-def process_labels(paths, coords):
+def process_labels(paths):
     """ This function processes the labels into a nice format for the simulator"""
     labels = []
     failed_to_parse = []
@@ -52,20 +52,14 @@ def process_labels(paths, coords):
                     print("door: " + str(e))
                     failed_to_parse.append(text_label)
                     continue
-            bndbox = (node.find("bndbox").find("xmin").text, node.find("bndbox").find("xmax").text, node.find("bndbox").find("ymin").text, node.find("bndbox").find("ymax").text)
-            labels.append((frame, obj_type, house_number, street_name, False, bndbox))
-    label_df = pd.DataFrame(labels, columns = ["frame", "obj_type", "house_number", "street_name", "is_goal", "coords"])
+            x_min = int(width * int(node.find("bndbox").find("xmin").text) / shape[0])
+            x_max = int(width * int(node.find("bndbox").find("xmax").text) / shape[0])
+            y_min = int((height - 2 * crop_margin) * int(node.find("bndbox").find("ymin").text)/ shape[1])
+            y_max = int((height - 2 * crop_margin) * int(node.find("bndbox").find("ymax").text) / shape[1])
+            area = (x_max  - x_min) * (y_max - y_min)
+            labels.append((frame, obj_type, house_number, street_name, False, x_min, x_max, y_min, y_max, area))
+    label_df = pd.DataFrame(labels, columns = ["frame", "obj_type", "house_number", "street_name", "is_goal", "x_min", "x_max", "y_min", "y_max", "area"])
     print("num labels failed to parse: " + str(len(failed_to_parse)))
-
-    # change label coords to mini space
-    if label_df.any().any():
-        for ix, row in label_df.iterrows():
-            row_coords = [int(x) for x in row["coords"]]
-            new_coords = (int(width * row_coords[0] / shape[0]),
-                          int(width * row_coords[1] / shape[0]),
-                          int((height - 2 * crop_margin) * row_coords[2] / shape[1]),
-                          int((height - 2 * crop_margin) * row_coords[3] / shape[1]))
-            label_df.at[ix, "coords"] = new_coords
 
     # find target panos -- they are the ones with the biggest bounding box an the house number
     doors = label_df[label_df.obj_type == "door"]
@@ -73,27 +67,19 @@ def process_labels(paths, coords):
 
     for address in addresses:
         house_number, street_name = address.split("-")
-        areas = []
         matched_doors = label_df[(label_df.obj_type == "door") & (label_df.house_number == house_number) & (label_df.street_name == street_name)]
-        for coords in [x for x in matched_doors['coords'].values]:
-            areas.append((int(coords[1]) - int(coords[0])) * (int(coords[3]) - int(coords[2])))
-        goal_pano = matched_doors.iloc[areas.index(max(areas))]
-        label_df.at[goal_pano.name, "is_goal"] = True
+        label_df.at[matched_doors.area.idxmax(), "is_goal"] = True
     return label_df
 
-def construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges, path, mini_corl=False):
+def construct_spatial_graph(coords_df, edge_blacklist, add_edges):
     """ Filter the pano coordinates by spatial relation and write the filtered graph to disk"""
     # Init graph
     G = nx.Graph()
-    coords_df = coords_df[~coords_df.index.isin(node_blacklist)]
-    if mini_corl:
-        box = (24, 76, -125, 10)
-        coords_df = coords_df[((coords_df.x > box[0]) & (coords_df.x < box[1]) & (coords_df.y > box[2]) & (coords_df.y < box[3]))]
-    G.add_nodes_from(coords_df.index)
+    G.add_nodes_from(coords_df.frame)
 
     nodes = G.nodes
     for node_1_idx in tqdm(nodes, desc="Adding edges to graph"):
-        meta = coords_df[coords_df.index == node_1_idx]
+        meta = coords_df[coords_df.frame == node_1_idx]
         coords = np.array([meta['x'].values[0], meta['y'].values[0], meta['z'].values[0]])
         G.nodes[node_1_idx]['coords'] = coords
         G.nodes[node_1_idx]['timestamp'] = meta.timestamp
@@ -101,10 +87,10 @@ def construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges
 
         radius = 1.1
         nearby_nodes = coords_df[(coords_df.x > coords[0] - radius) & (coords_df.x < coords[0] + radius) & (coords_df.y > coords[1] - radius) & (coords_df.y < coords[1] + radius)]
-        for node_2_idx, node_2_vals in nearby_nodes.iterrows():
+        for node_2_idx in nearby_nodes.frame:
             if node_1_idx == node_2_idx:
                 continue
-            meta2 = coords_df[coords_df.index == node_2_idx]
+            meta2 = coords_df[coords_df.frame == node_2_idx]
             coords2 = np.array([meta2['x'].values[0], meta2['y'].values[0], meta2['z'].values[0]])
             G.nodes[node_2_idx]['coords'] = coords2
             node_distance = np.linalg.norm(coords - coords2)
@@ -118,7 +104,7 @@ def construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges
         if n1 in G.nodes and n2 in G.nodes:
             G.add_edge(n1, n2)
 
-    return G, coords_df
+    return G
 
 def process_images(paths):
     thumbnails = np.zeros((len(paths), 84, 224, 3))
@@ -242,10 +228,23 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
             coords = np.load(data_path + "processed/pos_ang.npy")
         coords_df = pd.DataFrame({"x": coords[:, 2], "y": coords[:, 3], "z": coords[:, 4], "angle": coords[:, -1], "timestamp": coords[:, 1], "frame": [int(x) for x in coords[:, 1]*30]})
         node_blacklist, edge_blacklist, add_edges = construct_graph_cleanup(mini_corl)
+        coords_df = coords_df[~coords_df.index.isin(node_blacklist)]
+        if mini_corl:
+            box = (24, 76, -125, 10)
+            coords_df = coords_df[((coords_df.x > box[0]) & (coords_df.x < box[1]) & (coords_df.y > box[2]) & (coords_df.y < box[3]))]
 
-        G, coords_df = construct_spatial_graph(coords_df, node_blacklist, edge_blacklist, add_edges, data_path, mini_corl)
-        coords_df = label_segments(coords_df)
-        coords_df.to_hdf(data_path + "processed/coords.hdf5", key='df')
+        label_paths = [data_path + "raw/labels/pano_" + str(frame).zfill(6) + ".xml" for frame in coords_df["frame"].tolist()]
+        label_paths = [path for path in label_paths if os.path.isfile(path)]
+        label_df = process_labels(label_paths)
+
+        meta_df = label_df.merge(coords_df, how="outer", on="frame")
+        meta_df = label_segments(meta_df)
+        label_index = meta_df.groupby(meta_df.frame).cumcount()
+        meta_df.index = pd.MultiIndex.from_arrays([meta_df.frame, label_index], names=["frame", "label"])
+        meta_df.sort_index(inplace=True)
+        meta_df.to_hdf(data_path + "processed/meta.hdf5", key="df", index=False)
+        G = construct_spatial_graph(coords_df, edge_blacklist, add_edges)
+
         if do_plot:
             pos = {k: v.get("coords")[0:2] for k, v in G.nodes(data=True)}
             nx.draw_networkx(G, pos,
@@ -261,7 +260,7 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
         nx.write_gpickle(G, data_path + "processed/graph.pkl")
 
     else:
-        coords_df = pd.read_hdf(data_path + "processed/coords.hdf5", key="df", index=False)
+        meta_df = pd.read_hdf(data_path + "processed/meta_df.hdf5", key="df", index=False)
         G = nx.read_gpickle(data_path + "processed/graph.pkl")
 
     # Get png names and apply limit
@@ -274,11 +273,5 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
         f = gzip.GzipFile(data_path + "processed/images.pkl.gz", "w")
         pickle.dump(images, f)
         f.close()
-
-    if do_labels:
-        label_paths = [data_path + "raw/labels/pano_" + str(frame).zfill(6) + ".xml" for frame in coords_df["frame"].tolist()]
-        label_paths = [path for path in label_paths if os.path.isfile(path)]
-        label_df = process_labels(label_paths, coords_df.frame.values.tolist())
-        label_df.to_hdf(data_path + "processed/labels.hdf5", key="df", index=False)
 
 create_dataset(data_path="/data/data/mini-corl/", do_images=False, do_labels=True, do_graph=True, do_plot=False, mini_corl=True)

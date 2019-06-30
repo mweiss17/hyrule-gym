@@ -11,6 +11,7 @@ from matplotlib import pyplot as plt
 import cv2
 import gym
 import gzip
+import time
 from gym import spaces
 import h5py
 import pickle
@@ -55,7 +56,7 @@ class HyruleEnv(gym.GoalEnv):
         return res.reshape(-1)
 
     def convert_street_name(self, street_name):
-        res = self.label_df[self.label_df.obj_type == 'street_sign'].street_name.unique()
+        res = self.meta_df[self.meta_df.obj_type == 'street_sign'].street_name.unique()
         res = (res == street_name).astype(int)
         return res
 
@@ -64,21 +65,21 @@ class HyruleEnv(gym.GoalEnv):
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
-        path = os.getcwd() + path
+        #path = os.getcwd() + path
         #path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym" + path
-        path = "/home/martinweiss/hyrule-gym/data/data/mini-corl/processed/"
-        #path = "/Users/martinweiss/code/academic/hyrule-gym" + path
+        #path = "/home/martinweiss/hyrule-gym/data/data/mini-corl/processed/"
+        path = "/Users/martinweiss/code/academic/hyrule-gym" + path
         f = gzip.GzipFile(path + "images.pkl.gz", "r")
         self.images_df = pickle.load(f)
         f.close()
-        self.coords_df = pd.read_hdf(path + "coords.hdf5", key='df', mode='r')
-        self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
+        self.meta_df = pd.read_hdf(path + "meta.hdf5", key='df', mode='r')
+        # self.label_df = pd.read_hdf(path + "labels.hdf5", key='df', mode='r')
         self.G = nx.read_gpickle(path + "graph.pkl")
-
+        self.num_streets = self.meta_df[self.meta_df.obj_type == 'street_sign'].street_name.unique().size
         self.curriculum_learning = True
-        self.agent_loc = 191 #np.random.choice(self.coords_df.index)
+        self.agent_loc = np.random.choice(self.meta_df.frame)
         self.agent_dir = 0
-        self.difficulty = 10
+        self.difficulty = 0
         self.weighted = True
 
         self.shaped_reward = shaped_reward
@@ -107,26 +108,26 @@ class HyruleEnv(gym.GoalEnv):
         else:
             return angle
 
-    def select_goal(self, same_segment=True, difficulty=0):
-        goals = self.label_df[self.label_df.is_goal == True]
+    def select_goal(self, same_segment=False, difficulty=0):
+        goals = self.meta_df[self.meta_df.is_goal == True]
         G = self.G.copy()
         if same_segment:
-            frames = self.coords_df[(self.coords_df.type == "street_segment") & self.coords_df.frame.isin(goals.frame)].frame
+            frames = self.meta_df[(self.meta_df.type == "street_segment") & self.meta_df.frame.isin(goals.frame)].frame
             goals_on_street_segment = goals[goals.frame.isin(frames)]
-            goal = goals_on_street_segment.loc[np.random.choice(goals_on_street_segment.index.values.tolist())]
-            segment_group = self.coords_df[self.coords_df.frame == goal.frame].group.iloc[0]
-            segment_panos = self.coords_df[(self.coords_df.group == segment_group) & (self.coords_df.type == "street_segment")]
-            G.remove_nodes_from(self.coords_df[~self.coords_df.index.isin(segment_panos.index)].index)
+            goal = goals_on_street_segment.loc[np.random.choice(goals_on_street_segment.frame.values.tolist())]
+            # TODO: there might be a bug here, if there's no goal on the street segment :/
+            segment_group = self.meta_df[self.meta_df.frame == goal.frame.iloc[0]].group.iloc[0]
+            segment_panos = self.meta_df[(self.meta_df.group == segment_group) & (self.meta_df.type == "street_segment")]
+            G.remove_nodes_from(self.meta_df[~self.meta_df.index.isin(segment_panos.index)].index)
         else:
-            goal = goals.loc[np.random.choice(goals.index.values.tolist())]
-        goal_idx = self.coords_df[self.coords_df.frame == goal.frame].index.values[0]
+            goal = goals.loc[np.random.choice(goals.frame.values.tolist())]
+        goal_idx = self.meta_df[self.meta_df.frame == goal.frame.iloc[0]].frame.iloc[0]
         self.goal_id = goal.house_number
-        label = self.label_df[self.label_df.frame == int(self.coords_df.loc[goal_idx].frame)]
+        label = self.meta_df[self.meta_df.frame == int(self.meta_df.loc[goal_idx].frame.iloc[0])]
         label = label[label.is_goal]
-        pano_rotation = self.norm_angle(self.coords_df.loc[goal_idx].angle )
-        label_dir = self.norm_angle(360 * ((int(label["coords"].values[0][0]) + int(label["coords"].values[0][1])) / 2) / 224)
+        pano_rotation = self.norm_angle(self.meta_df.loc[goal_idx].angle.iloc[0])
+        label_dir = self.norm_angle(360 * (label.x_min.values[0] + label.x_max.values[0]) / 2 / 224)
         goal_dir = self.norm_angle(-label_dir + pano_rotation)
-
         # randomly selects a node n-transitions from the goal node
         if int(difficulty/4) == 0:
             nodes = [goal_idx]
@@ -141,9 +142,8 @@ class HyruleEnv(gym.GoalEnv):
                 self.agent_dir = (int(goal_dir/22.5)-np.random.choice(range(-difficulty, difficulty)))*22.5
             else:
                 self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
-        #goal_address = np.append(self.convert_house_numbers(goal.house_number),  self.convert_street_name(goal.street_name))
-        goal_address = {"house_numbers": self.convert_house_numbers(goal.house_number),
-                        "street_names": self.convert_street_name(goal.street_name)}
+        goal_address = {"house_numbers": self.convert_house_numbers(int(goal.house_number.iloc[0])),
+                        "street_names": self.convert_street_name(goal.street_name.iloc[0])}
         return goal_idx, goal_address, goal_dir
 
 
@@ -169,7 +169,9 @@ class HyruleEnv(gym.GoalEnv):
         done = False
         reward = 0.0
         action = self._action_set(a)
+        start = time.time()
         image, x, w = self._get_image()
+        start = time.time()
         visible_text = self.get_visible_text(x, w)
 
         if action == self.Actions.FORWARD:
@@ -184,8 +186,7 @@ class HyruleEnv(gym.GoalEnv):
         if self.shaped_reward and action not in [self.Actions.DONE, self.Actions.NOOP]:
             reward = self.compute_reward(x, {}, done)
             #print("Current reward: " + str(reward))
-
-        self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
+        self.agent_gps = self.sample_gps(self.meta_df.loc[self.agent_loc])
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
         obs = {"image": image, "mission": self.goal_address, "rel_gps": rel_gps, "visible_text": visible_text}
         self.num_steps_taken += 1
@@ -204,15 +205,14 @@ class HyruleEnv(gym.GoalEnv):
 
     def _get_image(self, high_res=False, plot=False):
         if high_res:
-        	#img = cv2.imread(filename=self.path + "/panos/pano_"+ str(self.agent_loc).zfill(6) + ".png")[:, :, ::-1]
             path = "data/data/mini-corl/panos/pano_"+ str(int(30*self.G.nodes[self.agent_loc]['timestamp'])).zfill(6) + ".png"
             img = cv2.resize(cv2.imread(path)[:, :, ::-1], (960, 480))
             obs_shape = (480, 480, 3)
         else:
-            img = self.images_df[self.coords_df.loc[self.agent_loc].frame]
+            img = self.images_df[self.meta_df.loc[self.agent_loc, 'frame'][0]]
             obs_shape = self.observation_space.shape
 
-        pano_rotation = self.norm_angle(self.coords_df.loc[self.agent_loc].angle + 90)
+        pano_rotation = self.norm_angle(self.meta_df.loc[self.agent_loc, 'angle'][0] + 90)
         w = obs_shape[0]
         y = img.shape[0] - obs_shape[0]
         h = obs_shape[0]
@@ -234,26 +234,23 @@ class HyruleEnv(gym.GoalEnv):
 
     def get_visible_text(self, x, w):
         visible_text = {}
-        pano_labels = self.label_df[self.label_df.frame == int(self.G.nodes[self.agent_loc]['timestamp'] * 30)]
-        # if not pano_labels.any().any():
-        #     return visible_text
-
         house_numbers = []
-        for idx, row in pano_labels[pano_labels.obj_type == 'house_number'].iterrows():
-            if x < row['coords'][0] and x+w > row['coords'][1]:
-                house_numbers.append(self.convert_house_numbers(row["house_number"]))
+        street_signs = []
+        subset = self.meta_df.loc[self.agent_loc, ["house_number", "street_name", "obj_type", "x_min", "x_max"]]
+        for idx, row in subset.iterrows():
+            if x < row.x_min and x + w > row.x_max:
+                if row.obj_type == "house_number":
+                    house_numbers.append(self.convert_house_numbers(row.house_number))
+                elif row.obj_type == "street_sign":
+                    street_signs.append(self.convert_street_name(row.street_name))
+
         temp = np.zeros(120)
         if len(house_numbers) != 0:
             nums = np.hstack(house_numbers)[:120]
             temp[:nums.size] = nums
         visible_text["house_numbers"] = temp
 
-        num_streets = self.label_df[self.label_df.obj_type == 'street_sign'].street_name.unique().size
-        street_signs = []
-        for idx, row in pano_labels[pano_labels.obj_type == 'street_sign'].iterrows():
-            if x < row['coords'][0] and x+w > row['coords'][1]:
-                street_signs.append(self.convert_street_name(row["street_name"]))
-        temp = np.zeros(6)
+        temp = np.zeros(2 * self.num_streets)
         if len(street_signs) != 0:
             nums = np.hstack(street_signs)[:6]
             temp[:nums.size] = nums
@@ -261,21 +258,18 @@ class HyruleEnv(gym.GoalEnv):
         return visible_text
 
     def sample_gps(self, groundtruth, scale=1):
-        x, y = groundtruth[['x', 'y']]
-        if type(x) == pd.core.series.Series:
-            x = x.values[0]
-            y = y.values[0]
-        x = x + np.random.normal(loc=0.0, scale=scale)
-        y = y + np.random.normal(loc=0.0, scale=scale)
+        coords = groundtruth[['x', 'y']]
         gps_scale = 100.0  # TODO: Arbitrary. Need a better normalizing value here. Requires min-max from dataframe.
-        return (x/gps_scale, y/gps_scale)
+        x = (coords.at[0, 'x'] + np.random.normal(loc=0.0, scale=scale)) / gps_scale
+        y = (coords.at[0, 'y'] + np.random.normal(loc=0.0, scale=scale)) / gps_scale
+        return (x, y)
 
     def reset(self):
         self.num_steps_taken = 0
-        self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(same_segment=True, difficulty=self.difficulty)
+        self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(same_segment=False, difficulty=self.difficulty)
         self.prev_spl = len(self.shortest_path_length())
-        self.agent_gps = self.sample_gps(self.coords_df.loc[self.agent_loc])
-        self.target_gps = self.sample_gps(self.coords_df.loc[self.goal_idx], scale=3.0)
+        self.agent_gps = self.sample_gps(self.meta_df.loc[self.agent_loc])
+        self.target_gps = self.sample_gps(self.meta_df.loc[self.goal_idx], scale=3.0)
         image, x, w = self._get_image()
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
         return {"image": image, "mission": self.goal_address, "rel_gps": rel_gps, "visible_text": self.get_visible_text(x, w)}
@@ -356,15 +350,14 @@ class HyruleEnv(gym.GoalEnv):
         return 0.0
 
     def is_successful_trajectory(self, x):
-        label = self.label_df[(self.label_df.frame == self.coords_df.loc[self.goal_idx].frame) & (self.label_df.obj_type == "door") & (self.label_df.house_number == self.goal_id)]
-        is_in_correct_pano = (label.frame == int(self.coords_df.loc[self.agent_loc].frame)).values[0]
-        is_facing_correct_dir = False
-        coords = label.coords.values[0]
-        if x < coords[0] and x + 84 > coords[1]:
-            is_facing_correct_dir = True
-        if is_in_correct_pano and is_facing_correct_dir:
+        subset = self.meta_df.loc[self.agent_loc, ["frame", "obj_type", "house_number", "x_min", "x_max"]]
+        label = subset[(subset.house_number == self.goal_id.iloc[0]) & (subset.obj_type == "door")]#) & (subset.obj_type == "door")]].any()
+        x_min = label.x_min.get(0, 0) if type(label.x_min) == pd.Series else label.x_min
+        x_max = label.x_max.get(0, 0) if type(label.x_max) == pd.Series else label.x_max
+        if label.any().any() and x < x_min and x + 84 > x_max:
             #print("achieved goal")
-            return 1.0
+            return True
+        return False
 
     def render(self, mode='human'):
         img, x, w = self._get_image()
