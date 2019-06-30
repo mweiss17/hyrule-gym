@@ -74,7 +74,7 @@ class HyruleEnv(gym.GoalEnv):
         self.G = nx.read_gpickle(path + "graph.pkl")
 
         self.num_streets = self.meta_df[self.meta_df.obj_type == 'street_sign'].street_name.unique().size
-        self.curriculum_learning = True
+        self.curriculum_learning = False
         self.agent_loc = np.random.choice(self.meta_df.frame)
         self.agent_dir = 0
         self.difficulty = 0
@@ -106,7 +106,7 @@ class HyruleEnv(gym.GoalEnv):
         else:
             return angle
 
-    def select_goal(self, same_segment=False, difficulty=0):
+    def select_goal(self, same_segment=True, difficulty=0):
         goals = self.meta_df[self.meta_df.is_goal == True]
         G = self.G.copy()
         if same_segment:
@@ -126,20 +126,21 @@ class HyruleEnv(gym.GoalEnv):
         pano_rotation = self.norm_angle(self.meta_df.loc[goal_idx].angle.iloc[0])
         label_dir = self.norm_angle(360 * (label.x_min.values[0] + label.x_max.values[0]) / 2 / 224)
         goal_dir = self.norm_angle(-label_dir + pano_rotation)
+        self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
         # randomly selects a node n-transitions from the goal node
-        if int(difficulty/4) == 0:
-            nodes = [goal_idx]
-        if int(difficulty/4) >= 1:
-            nodes = set(nx.ego_graph(G, goal_idx, radius=int(difficulty/4)))
-            nodes -= set(nx.ego_graph(G, goal_idx, radius=int(difficulty-1 / 4)))
-        if self.curriculum_learning:
-            self.agent_loc = np.random.choice(list(nodes)) if len(list(nodes)) > 0 else np.random.choice(list(G.nodes))
-            if difficulty == 0:
-                self.agent_dir = int(goal_dir/22.5)*22.5
-            elif difficulty <=3:
-                self.agent_dir = (int(goal_dir/22.5)-np.random.choice(range(-difficulty, difficulty)))*22.5
-            else:
-                self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
+        # if int(difficulty/4) == 0:
+        #     nodes = [goal_idx]
+        # if int(difficulty/4) >= 1:
+        #     nodes = set(nx.ego_graph(G, goal_idx, radius=int(difficulty/4)))
+        #     nodes -= set(nx.ego_graph(G, goal_idx, radius=int(difficulty-1 / 4)))
+        # if self.curriculum_learning:
+        #     self.agent_loc = np.random.choice(list(nodes)) if len(list(nodes)) > 0 else np.random.choice(list(G.nodes))
+        #     if difficulty == 0:
+        #         self.agent_dir = int(goal_dir/22.5)*22.5
+        #     elif difficulty <=3:
+        #         self.agent_dir = (int(goal_dir/22.5)-np.random.choice(range(-difficulty, difficulty)))*22.5
+        #     else:
+        #         self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
         goal_address = {"house_numbers": self.convert_house_numbers(int(goal.house_number.iloc[0])),
                         "street_names": self.convert_street_name(goal.street_name.iloc[0])}
         return goal_idx, goal_address, goal_dir
@@ -155,7 +156,7 @@ class HyruleEnv(gym.GoalEnv):
             neighbors[n] = self.get_angle_between_nodes(n, self.agent_loc)
 
         if neighbors[min(neighbors, key=neighbors.get)] > 45:
-            return 
+            return
 
         self.agent_loc = min(neighbors, key=neighbors.get)
 
@@ -263,7 +264,7 @@ class HyruleEnv(gym.GoalEnv):
 
     def reset(self):
         self.num_steps_taken = 0
-        self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(same_segment=False, difficulty=self.difficulty)
+        self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(same_segment=True, difficulty=self.difficulty)
         self.prev_spl = len(self.shortest_path_length())
         self.agent_gps = self.sample_gps(self.meta_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.meta_df.loc[self.goal_idx], scale=3.0)
@@ -292,7 +293,10 @@ class HyruleEnv(gym.GoalEnv):
         cur_node = self.agent_loc
         cur_dir = self.agent_dir + 180
         target_node = self.goal_idx
-        path = nx.shortest_path(self.G, cur_node, target=target_node)
+        try:
+            path = nx.shortest_path(self.G, cur_node, target=target_node)
+        except Exception:
+            import pdb; pdb.set_trace()
         actions = []
         for idx, node in enumerate(path):
 

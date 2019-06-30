@@ -71,15 +71,19 @@ def process_labels(paths):
         label_df.at[matched_doors.area.idxmax(), "is_goal"] = True
     return label_df
 
-def construct_spatial_graph(coords_df, edge_blacklist, add_edges):
+def construct_spatial_graph(coords_df, is_mini_corl, do_plot):
     """ Filter the pano coordinates by spatial relation and write the filtered graph to disk"""
+
+    coords_df, node_blacklist, edge_blacklist, add_edges = cleanup_graph(coords_df, is_mini_corl)
+    coords_df = coords_df[~coords_df.index.isin(node_blacklist)]
+
     # Init graph
     G = nx.Graph()
-    G.add_nodes_from(coords_df.frame)
+    G.add_nodes_from(coords_df.index)
 
     nodes = G.nodes
     for node_1_idx in tqdm(nodes, desc="Adding edges to graph"):
-        meta = coords_df[coords_df.frame == node_1_idx]
+        meta = coords_df[coords_df.index == node_1_idx]
         coords = np.array([meta['x'].values[0], meta['y'].values[0], meta['z'].values[0]])
         G.nodes[node_1_idx]['coords'] = coords
         G.nodes[node_1_idx]['timestamp'] = meta.timestamp
@@ -87,10 +91,10 @@ def construct_spatial_graph(coords_df, edge_blacklist, add_edges):
 
         radius = 1.1
         nearby_nodes = coords_df[(coords_df.x > coords[0] - radius) & (coords_df.x < coords[0] + radius) & (coords_df.y > coords[1] - radius) & (coords_df.y < coords[1] + radius)]
-        for node_2_idx in nearby_nodes.frame:
+        for node_2_idx in nearby_nodes.index:
             if node_1_idx == node_2_idx:
                 continue
-            meta2 = coords_df[coords_df.frame == node_2_idx]
+            meta2 = coords_df[coords_df.index == node_2_idx]
             coords2 = np.array([meta2['x'].values[0], meta2['y'].values[0], meta2['z'].values[0]])
             G.nodes[node_2_idx]['coords'] = coords2
             node_distance = np.linalg.norm(coords - coords2)
@@ -104,7 +108,22 @@ def construct_spatial_graph(coords_df, edge_blacklist, add_edges):
         if n1 in G.nodes and n2 in G.nodes:
             G.add_edge(n1, n2)
 
-    return G
+    mapping = coords_df.loc[coords_df.index, 'frame'].to_dict()
+    G = nx.relabel_nodes(G, mapping)
+    if do_plot:
+        pos = {k: v.get("coords")[0:2] for k, v in G.nodes(data=True)}
+        nx.draw_networkx(G, pos,
+                         nodelist=G.nodes,
+                         node_color='r',
+                         node_size=10,
+                         alpha=0.8,
+                         with_label=True)
+        #nx.draw(G, pos,node_color='r', node_size=1)
+
+        plt.axis('equal')
+        plt.show()
+
+    return G, coords_df
 
 def process_images(paths):
     thumbnails = np.zeros((len(paths), 84, 224, 3))
@@ -124,7 +143,7 @@ def process_images(paths):
     images = {frame: img for frame, img in zip(frames, thumbnails)}
     return images
 
-def construct_graph_cleanup(mini_corl=False):
+def cleanup_graph(coords_df, is_mini_corl):
     node_blacklist = [928, 929, 930, 931, 1138, 6038, 6039, 5721, 5722, 6091, 6090, 6039, \
                       6082, 6197, 6039, 6088, 4809, 5964, 5504, 5505, 5467, 5514, 174,    \
                       188, 189, 190, 2390, 2391, 2392, 2393, 1862, 1863, 1512, 1821, 4227,\
@@ -177,7 +196,7 @@ def construct_graph_cleanup(mini_corl=False):
                  (100, 101), (98, 1348), (99, 1348), (3630, 3631), (3631, 3632), (3632, 3633),       \
                  (3634, 3635), (2375, 3661), (1834, 2234), (1834, 2233), (3366, 3367), (2827, 2363), \
                  (379, 611), (2948, 3110), (2604, 3110), (3076, 3077)]
-    if mini_corl:
+    if is_mini_corl:
         node_blacklist.extend([x for x in range(877, 879)])
         node_blacklist.extend([x for x in range(52, 56)])
         node_blacklist.extend([x for x in range(31, 39)])
@@ -186,8 +205,9 @@ def construct_graph_cleanup(mini_corl=False):
         node_blacklist.extend([x for x in range(3632, 3636)])
         node_blacklist.extend([x for x in range(3661, 3669)])
         node_blacklist.extend([x for x in range(780, 784)])
-
-    return node_blacklist, edge_blacklist, add_edges
+        box = (24, 76, -125, 10)
+        coords_df = coords_df[((coords_df.x > box[0]) & (coords_df.x < box[1]) & (coords_df.y > box[2]) & (coords_df.y < box[3]))]
+    return coords_df, node_blacklist, edge_blacklist, add_edges
 
 def label_segments(coords_df):
     coords_df["type"] = None
@@ -214,7 +234,7 @@ def label_segments(coords_df):
         coords_df.loc[intersection.index] = intersection
     return coords_df
 
-def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True, do_graph=True, do_plot=False, limit=None, mini_corl=False):
+def create_dataset(data_path="/data/data/corl/", do_images=True, do_graph=True, do_plot=False, limit=None, is_mini_corl=False):
     """
     Loads in the pano images from disk, crops them, resizes them, and writes them to disk.
     Then pre-processes the pose data associated with the image and calls the fn to create the graph and to process the labels
@@ -227,12 +247,8 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
         else:
             coords = np.load(data_path + "processed/pos_ang.npy")
         coords_df = pd.DataFrame({"x": coords[:, 2], "y": coords[:, 3], "z": coords[:, 4], "angle": coords[:, -1], "timestamp": coords[:, 1], "frame": [int(x) for x in coords[:, 1]*30]})
-        node_blacklist, edge_blacklist, add_edges = construct_graph_cleanup(mini_corl)
-        coords_df = coords_df[~coords_df.index.isin(node_blacklist)]
-        if mini_corl:
-            box = (24, 76, -125, 10)
-            coords_df = coords_df[((coords_df.x > box[0]) & (coords_df.x < box[1]) & (coords_df.y > box[2]) & (coords_df.y < box[3]))]
-
+        G, coords_df = construct_spatial_graph(coords_df, is_mini_corl, do_plot)
+        nx.write_gpickle(G, data_path + "processed/graph.pkl")
         label_paths = [data_path + "raw/labels/pano_" + str(frame).zfill(6) + ".xml" for frame in coords_df["frame"].tolist()]
         label_paths = [path for path in label_paths if os.path.isfile(path)]
         label_df = process_labels(label_paths)
@@ -243,22 +259,6 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
         meta_df.index = pd.MultiIndex.from_arrays([meta_df.frame, label_index], names=["frame", "label"])
         meta_df.sort_index(inplace=True)
         meta_df.to_hdf(data_path + "processed/meta.hdf5", key="df", index=False)
-        G = construct_spatial_graph(coords_df, edge_blacklist, add_edges)
-
-        if do_plot:
-            pos = {k: v.get("coords")[0:2] for k, v in G.nodes(data=True)}
-            nx.draw_networkx(G, pos,
-                             nodelist=G.nodes,
-                             node_color='r',
-                             node_size=10,
-                             alpha=0.8,
-                             with_label=True)
-            #nx.draw(G, pos,node_color='r', node_size=1)
-
-            plt.axis('equal')
-            plt.show()
-        nx.write_gpickle(G, data_path + "processed/graph.pkl")
-
     else:
         meta_df = pd.read_hdf(data_path + "processed/meta_df.hdf5", key="df", index=False)
         G = nx.read_gpickle(data_path + "processed/graph.pkl")
@@ -274,4 +274,4 @@ def create_dataset(data_path="/data/data/corl/", do_images=True, do_labels=True,
         pickle.dump(images, f)
         f.close()
 
-create_dataset(data_path="/data/data/mini-corl/", do_images=False, do_labels=True, do_graph=True, do_plot=False, mini_corl=True)
+create_dataset(data_path="/data/data/mini-corl/", do_images=False, do_graph=True, do_plot=False, is_mini_corl=True)
