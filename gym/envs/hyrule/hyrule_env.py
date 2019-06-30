@@ -113,12 +113,12 @@ class HyruleEnv(gym.GoalEnv):
             frames = self.meta_df[(self.meta_df.type == "street_segment") & self.meta_df.frame.isin(goals.frame)].frame
             goals_on_street_segment = goals[goals.frame.isin(frames)]
             goal = goals_on_street_segment.loc[np.random.choice(goals_on_street_segment.frame.values.tolist())]
-            # TODO: there might be a bug here, if there's no goal on the street segment :/
             segment_group = self.meta_df[self.meta_df.frame == goal.frame.iloc[0]].group.iloc[0]
             segment_panos = self.meta_df[(self.meta_df.group == segment_group) & (self.meta_df.type == "street_segment")]
             G.remove_nodes_from(self.meta_df[~self.meta_df.index.isin(segment_panos.index)].index)
         else:
             goal = goals.loc[np.random.choice(goals.frame.values.tolist())]
+
         goal_idx = self.meta_df[self.meta_df.frame == goal.frame.iloc[0]].frame.iloc[0]
         self.goal_id = goal.house_number
         label = self.meta_df[self.meta_df.frame == int(self.meta_df.loc[goal_idx].frame.iloc[0])]
@@ -127,6 +127,7 @@ class HyruleEnv(gym.GoalEnv):
         label_dir = self.norm_angle(360 * (label.x_min.values[0] + label.x_max.values[0]) / 2 / 224)
         goal_dir = self.norm_angle(-label_dir + pano_rotation)
         self.agent_dir = 22.5 * np.random.choice(range(-8, 8))
+        self.agent_loc = np.random.choice(segment_panos.frame.unique())
         # randomly selects a node n-transitions from the goal node
         # if int(difficulty/4) == 0:
         #     nodes = [goal_idx]
@@ -168,8 +169,11 @@ class HyruleEnv(gym.GoalEnv):
         done = False
         reward = 0.0
         action = self._action_set(a)
+        oracle=False
+        if oracle:
+            shortest_path = self.shortest_path_length()
+            action = shortest_path[0]
         image, x, w = self._get_image()
-        start = time.time()
         visible_text = self.get_visible_text(x, w)
 
         if action == self.Actions.FORWARD:
@@ -293,10 +297,7 @@ class HyruleEnv(gym.GoalEnv):
         cur_node = self.agent_loc
         cur_dir = self.agent_dir + 180
         target_node = self.goal_idx
-        try:
-            path = nx.shortest_path(self.G, cur_node, target=target_node)
-        except Exception:
-            import pdb; pdb.set_trace()
+        path = nx.shortest_path(self.G, cur_node, target=target_node)
         actions = []
         for idx, node in enumerate(path):
 
@@ -338,13 +339,13 @@ class HyruleEnv(gym.GoalEnv):
             elif done and not self.is_successful_trajectory(x):
                 reward = -2.0
             elif self.prev_spl - cur_spl == 1:
-                reward = -10.5
+                reward = -0.1
             elif self.prev_spl - cur_spl <= 0:
                 reward = -10.5
             else:
                 reward = 0.0
             self.prev_spl = cur_spl
-            # print("reward: " + str(reward))
+            print("reward: " + str(reward))
             return reward
         if self.is_successful_trajectory(x):
             return 1.0
