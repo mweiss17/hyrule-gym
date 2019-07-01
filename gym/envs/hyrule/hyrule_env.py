@@ -87,8 +87,9 @@ class HyruleEnv(gym.GoalEnv):
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
         #path = os.getcwd() + path
-        #path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym" + path
-        path = "/home/martin/hyrule-gym/data/data/mini-corl/processed/"
+        self.mydir = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym"
+        path = self.mydir + path
+        #path = "/home/martin/hyrule-gym/data/data/mini-corl/processed/"
         #path = "/Users/martinweiss/code/academic/hyrule-gym" + path
         f = gzip.GzipFile(path + "images.pkl.gz", "r")
         self.images_df = pickle.load(f)
@@ -106,6 +107,9 @@ class HyruleEnv(gym.GoalEnv):
         self.shaped_reward = shaped_reward
         self.max_num_steps = 500
         self.num_steps_taken = 0
+
+        self.store_test = False
+        self.test_mode = False
 
     def turn(self, action):
         action = self._action_set(action)
@@ -294,8 +298,14 @@ class HyruleEnv(gym.GoalEnv):
 
     def reset(self):
         self.num_steps_taken = 0
-        self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(same_segment=True, difficulty=self.difficulty)
-        self.prev_spl = len(self.shortest_path_length())
+        if self.test_mode:
+            self.load_test_task()
+        else:
+            self.goal_idx, self.goal_address, self.goal_dir = self.select_goal(same_segment=True, difficulty=self.difficulty)
+            self.prev_spl = len(self.shortest_path_length())
+            if self.store_test:
+                self.store_test_task()
+                self.store_test = False
         self.agent_gps = self.sample_gps(self.meta_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.meta_df.loc[self.goal_idx], scale=3.0)
         image, x, w = self._get_image()
@@ -449,10 +459,10 @@ class HyruleEnv(gym.GoalEnv):
         agent_info = {"idx": self.agent_loc, "dir": self.agent_dir}
         goal_info = {"idx": self.goal_idx, "dir": self.goal_dir}
         test_task = {"agent_info": agent_info, "goal_info": goal_info, "spl": self.prev_spl}
-        np.save(os.getcwd()+path + "test_task.npy", test_task)
+        np.save(self.mydir+path + "test_task.npy", test_task)
 
     def load_test_task(self):
-        test_task = np.load("data/data/mini-corl/processed/test_task.npy")
+        test_task = np.load(self.mydir+"/data/data/mini-corl/processed/test_task.npy")
         self.agent_loc = test_task.item().get('agent_info')['idx']
         self.agent_dir = test_task.item().get('agent_info')['dir']
         self.goal_idx = test_task.item().get('goal_info')['idx']
