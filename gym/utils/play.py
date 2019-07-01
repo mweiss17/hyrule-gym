@@ -204,6 +204,8 @@ def main():
     parser.add_argument('--env', type=str, default='Hyrule-noop-v0', help='Define Environment')
     args = parser.parse_args()
     env = gym.make(args.env)
+    # env.store_test = True
+    env.test_mode = True
     play(env, zoom=4, fps=6)
 
 

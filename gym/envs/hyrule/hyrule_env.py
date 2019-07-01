@@ -74,7 +74,8 @@ class HyruleEnv(gym.GoalEnv):
         res = (res == street_name).astype(int)
         return res
 
-    def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3), shaped_reward=True, can_noop=False, can_done=False):
+    def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3),
+                 shaped_reward=True, can_noop=False, can_done=False, store_test=False, test_mode=False):
         self.viewer = None
         self.can_noop = can_noop
         self.can_done = can_done
@@ -108,8 +109,8 @@ class HyruleEnv(gym.GoalEnv):
         self.max_num_steps = 500
         self.num_steps_taken = 0
 
-        self.store_test = False
-        self.test_mode = False
+        self.store_test = store_test
+        self.test_mode = test_mode
 
     def turn(self, action):
         action = self._action_set(action)
@@ -458,7 +459,7 @@ class HyruleEnv(gym.GoalEnv):
     def store_test_task(self):
         path = "/data/data/mini-corl/processed/"
         agent_info = {"idx": self.agent_loc, "dir": self.agent_dir}
-        goal_info = {"idx": self.goal_idx, "dir": self.goal_dir}
+        goal_info = {"idx": self.goal_idx, "dir": self.goal_dir, "address": self.goal_address, "goal_id": self.goal_id}
         test_task = {"agent_info": agent_info, "goal_info": goal_info, "spl": self.prev_spl}
         np.save(self.mydir+path + "test_task.npy", test_task)
 
@@ -468,4 +469,7 @@ class HyruleEnv(gym.GoalEnv):
         self.agent_dir = test_task.item().get('agent_info')['dir']
         self.goal_idx = test_task.item().get('goal_info')['idx']
         self.goal_dir = test_task.item().get('goal_info')['dir']
+        self.goal_address = test_task.item().get('goal_info')['address']
+        self.goal_id = test_task.item().get('goal_info')['goal_id']
+        self.prev_spl = test_task.item().get('spl')
         print("Test Task SPL:", test_task.item().get('spl'))
