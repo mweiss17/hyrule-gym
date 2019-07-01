@@ -317,13 +317,23 @@ class HyruleEnv(gym.GoalEnv):
         go_left = []
         go_right = []
         temp = cur
+        while np.abs(target - cur) > 67.5:
+            cur = (cur - 67.5) % 360
+            go_right.append(self.Actions.RIGHT_BIG)
+
         while np.abs(target - cur) > 22.5:
             cur = (cur - 22.5) % 360
             go_right.append(self.Actions.RIGHT_SMALL)
         cur = temp
+
+        while np.abs(target - cur) > 67.5:
+            cur = (cur + 67.5) % 360
+            go_left.append(self.Actions.LEFT_BIG)
+
         while np.abs(target - cur) > 22.5:
             cur = (cur + 22.5) % 360
             go_left.append(self.Actions.LEFT_SMALL)
+
         if len(go_left) > len(go_right):
             return go_right
         return go_left
@@ -377,9 +387,9 @@ class HyruleEnv(gym.GoalEnv):
             elif done and not self.is_successful_trajectory(x):
                 reward = -2.0
             elif self.prev_spl - cur_spl == 1:
-                reward = -0.1
+                reward = 1
             elif self.prev_spl - cur_spl <= 0:
-                reward = -10.5
+                reward = -1
             else:
                 reward = 0.0
             self.prev_spl = cur_spl
