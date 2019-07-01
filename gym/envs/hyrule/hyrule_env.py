@@ -23,13 +23,29 @@ ACTION_MEANING = {
     2: 'FORWARD',
     3: 'RIGHT_SMALL',
     4: 'RIGHT_BIG',
-    5: 'DONE'
+    5: 'DONE',
+    6: 'NOOP',
 }
 
 class HyruleEnv(gym.GoalEnv):
     metadata = {'render.modes': ['human', 'rgb_array']}
 
     class Actions(enum.IntEnum):
+        LEFT_BIG = 0
+        LEFT_SMALL = 1
+        FORWARD = 2
+        RIGHT_SMALL = 3
+        RIGHT_BIG = 4
+
+    class NoopActions(enum.IntEnum):
+        LEFT_BIG = 0
+        LEFT_SMALL = 1
+        FORWARD = 2
+        RIGHT_SMALL = 3
+        RIGHT_BIG = 4
+        NOOP = 6
+
+    class DoneActions(enum.IntEnum):
         LEFT_BIG = 0
         LEFT_SMALL = 1
         FORWARD = 2
@@ -58,15 +74,28 @@ class HyruleEnv(gym.GoalEnv):
         res = (res == street_name).astype(int)
         return res
 
-    def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3), shaped_reward=True):
+    def add_noop_action(self):
+        self.can_noop = True
+
+    def add_done_action(self):
+        self.can_done = True
+
+    def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3), shaped_reward=True, can_noop=False, can_done=False):
         self.viewer = None
-        self._action_set = HyruleEnv.Actions
+        self.can_noop = can_noop
+        self.can_done = can_done
+        if can_noop:
+            self._action_set = HyruleEnv.DoneActions
+        elif can_noop:
+            self._action_set = HyruleEnv.NoopActions
+        else:
+            self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
         #path = os.getcwd() + path
         #path = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym" + path
-        #path = "/home/martinweiss/hyrule-gym/data/data/mini-corl/processed/"
-        path = "/Users/martinweiss/code/academic/hyrule-gym" + path
+        path = "/home/martin/hyrule-gym/data/data/mini-corl/processed/"
+        #path = "/Users/martinweiss/code/academic/hyrule-gym" + path
         f = gzip.GzipFile(path + "images.pkl.gz", "r")
         self.images_df = pickle.load(f)
         f.close()
@@ -169,23 +198,26 @@ class HyruleEnv(gym.GoalEnv):
         done = False
         reward = 0.0
         action = self._action_set(a)
-        oracle=False
+        oracle = False
         if oracle:
             shortest_path = self.shortest_path_length()
             action = shortest_path[0]
         image, x, w = self._get_image()
         visible_text = self.get_visible_text(x, w)
 
-        if action == self.Actions.FORWARD:
+        if not self.can_done and self.is_successful_trajectory(x):
+            done = True
+            reward = self.compute_reward(x, {}, done)
+        elif action == self.Actions.FORWARD:
             self.transition()
-        elif action == self.Actions.DONE:
+        elif self.can_done and action == self.DoneActions.DONE:
             done = True
             reward = self.compute_reward(x, {}, done)
             # print("Mission reward: " + str(reward))
         else:
             self.turn(action)
 
-        if self.shaped_reward and action != self.Actions.DONE:
+        if self.shaped_reward:
             reward = self.compute_reward(x, {}, done)
             #print("Current reward: " + str(reward))
         self.agent_gps = self.sample_gps(self.meta_df.loc[self.agent_loc])
@@ -308,7 +340,8 @@ class HyruleEnv(gym.GoalEnv):
                 actions.append(self.Actions.FORWARD)
             else:
                 actions.extend(self.angles_to_turn(cur_dir, self.goal_dir + 180))
-                actions.append(self.Actions.DONE)
+                if self.can_done:
+                    actions.append(self.DoneActions.DONE)
         # print("SPL:", len(actions))
         return actions
 
@@ -387,8 +420,11 @@ class HyruleEnv(gym.GoalEnv):
             'FORWARD': ord('w'),
             'RIGHT_SMALL': ord('e'),
             'RIGHT_BIG': ord('d'),
-            'DONE': ord('s'),
         }
+        if self.can_noop:
+            KEYWORD_TO_KEY['NOOP'] = ord('n')
+        if self.can_done:
+            KEYWORD_TO_KEY['DONE'] = ord('s')
 
         keys_to_action = {}
 
