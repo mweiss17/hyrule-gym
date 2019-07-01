@@ -339,6 +339,21 @@ register(
     max_episode_steps=10000,
 )
 
+
+register(
+    id='Hyrule-done-v0',
+    entry_point='gym.envs.hyrule:HyruleEnv',
+    kwargs={'obs_type': 'image', 'can_done': True},
+    max_episode_steps=10000,
+)
+
+register(
+    id='Hyrule-noop-v0',
+    entry_point='gym.envs.hyrule:HyruleEnv',
+    kwargs={'obs_type': 'image', 'can_noop': True},
+    max_episode_steps=10000,
+)
+
 # Robotics
 # ----------------------------------------
 
