@@ -75,7 +75,7 @@ class HyruleEnv(gym.GoalEnv):
         return res
 
     def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3),
-                 shaped_reward=True, can_noop=False, can_done=False, store_test=False, test_mode=True):
+                 shaped_reward=True, can_noop=False, can_done=False, store_test=False, test_mode=False):
         self.viewer = None
         self.can_noop = can_noop
         self.can_done = can_done
