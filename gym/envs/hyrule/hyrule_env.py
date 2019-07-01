@@ -403,3 +403,18 @@ class HyruleEnv(gym.GoalEnv):
             keys_to_action[keys] = action_id
 
         return keys_to_action
+
+    def store_test_task(self):
+        path = "/data/data/mini-corl/processed/"
+        agent_info = {"idx": self.agent_loc, "dir": self.agent_dir}
+        goal_info = {"idx": self.goal_idx, "dir": self.goal_dir}
+        test_task = {"agent_info": agent_info, "goal_info": goal_info, "spl": self.prev_spl}
+        np.save(os.getcwd()+path + "test_task.npy", test_task)
+
+    def load_test_task(self):
+        test_task = np.load("data/data/mini-corl/processed/test_task.npy")
+        self.agent_loc = test_task.item().get('agent_info')['idx']
+        self.agent_dir = test_task.item().get('agent_info')['dir']
+        self.goal_idx = test_task.item().get('goal_info')['idx']
+        self.goal_dir = test_task.item().get('goal_info')['dir']
+        print("Test Task SPL:", test_task.item().get('spl'))
