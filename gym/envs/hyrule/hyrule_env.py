@@ -87,7 +87,7 @@ class HyruleEnv(gym.GoalEnv):
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
         #path = os.getcwd() + path
-        self.mydir = "/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym"
+        self.mydir = "/".join(os.getcwd().split("/")[:-1]) + "/hyrule-gym" #"/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym"
         path = self.mydir + path
         #path = "/home/martin/hyrule-gym/data/data/mini-corl/processed/"
         #path = "/Users/martinweiss/code/academic/hyrule-gym" + path
@@ -306,6 +306,7 @@ class HyruleEnv(gym.GoalEnv):
             if self.store_test:
                 self.store_test_task()
                 self.store_test = False
+        self.start_spl = self.prev_spl
         self.agent_gps = self.sample_gps(self.meta_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.meta_df.loc[self.goal_idx], scale=3.0)
         image, x, w = self._get_image()
@@ -385,14 +386,14 @@ class HyruleEnv(gym.GoalEnv):
                 reward = 2.0
             elif done and not self.is_successful_trajectory(x):
                 reward = -2.0
-            elif self.prev_spl - cur_spl == 1:
-                reward = 1
-            elif self.prev_spl - cur_spl <= 0:
+            elif self.prev_spl - cur_spl > 0:
+                reward = 1 #- (self.num_steps_taken / self.start_spl)
+            elif self.prev_spl - cur_spl < 0:
                 reward = -1
             else:
                 reward = 0.0
             self.prev_spl = cur_spl
-            print("reward: " + str(reward))
+            # print("reward: " + str(reward))
             return reward
         if self.is_successful_trajectory(x):
             return 1.0
