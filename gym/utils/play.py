@@ -128,11 +128,7 @@ def play(env, transpose=True, fps=30, zoom=None, callback=None, keys_to_action=N
             env_done = False
             obs = env.reset()
         else:
-            if env.can_noop:
-                action = keys_to_action.get(tuple(sorted(pressed_keys)), 6)
-            else:
-                action = keys_to_action.get(tuple(sorted(pressed_keys)), 2)
-
+            action = keys_to_action.get(tuple(sorted(pressed_keys)), 6)
             prev_obs = obs
             obs, rew, env_done, info = env.step(action)
 

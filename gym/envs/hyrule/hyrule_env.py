@@ -74,22 +74,16 @@ class HyruleEnv(gym.GoalEnv):
         res = (res == street_name).astype(int)
         return res
 
-    def add_noop_action(self):
-        self.can_noop = True
-
-    def add_done_action(self):
-        self.can_done = True
-
     def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3), shaped_reward=True, can_noop=False, can_done=False):
         self.viewer = None
         self.can_noop = can_noop
         self.can_done = can_done
         if can_noop:
-            self._action_set = HyruleEnv.DoneActions
-        elif can_noop:
-            self._action_set = HyruleEnv.NoopActions
-        else:
-            self._action_set = HyruleEnv.Actions
+            HyruleEnv.Actions = HyruleEnv.NoopActions
+        elif can_done:
+            HyruleEnv.Actions = HyruleEnv.DoneActions
+
+        self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
         self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
         #path = os.getcwd() + path
@@ -214,7 +208,7 @@ class HyruleEnv(gym.GoalEnv):
             reward = self.compute_reward(x, {}, done)
         elif action == self.Actions.FORWARD:
             self.transition()
-        elif self.can_done and action == self.DoneActions.DONE:
+        elif self.can_done and action == self.Actions.DONE:
             done = True
             reward = self.compute_reward(x, {}, done)
             # print("Mission reward: " + str(reward))
@@ -351,7 +345,7 @@ class HyruleEnv(gym.GoalEnv):
             else:
                 actions.extend(self.angles_to_turn(cur_dir, self.goal_dir + 180))
                 if self.can_done:
-                    actions.append(self.DoneActions.DONE)
+                    actions.append(self.Actions.DONE)
         # print("SPL:", len(actions))
         return actions
 
