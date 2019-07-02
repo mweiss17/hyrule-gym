@@ -75,7 +75,7 @@ class HyruleEnv(gym.GoalEnv):
         return res
 
     def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3),
-                 shaped_reward=True, can_noop=False, can_done=False, store_test=False, test_mode=True):
+                 shaped_reward=True, can_noop=False, can_done=False, store_test=False, test_mode=False):
         self.viewer = None
         self.can_noop = can_noop
         self.can_done = can_done
@@ -134,11 +134,15 @@ class HyruleEnv(gym.GoalEnv):
         else:
             return angle
 
-    def select_goal(self, same_segment=True, difficulty=0):
+    def select_goal(self, same_segment=True, one_segment=True, difficulty=0):
         goals = self.meta_df[self.meta_df.is_goal == True]
         G = self.G.copy()
         if same_segment:
-            frames = self.meta_df[(self.meta_df.type == "street_segment") & self.meta_df.frame.isin(goals.frame)].frame
+            if one_segment:
+                frames = self.meta_df[(self.meta_df.type == "street_segment") & self.meta_df.frame.isin(goals.frame) & (self.meta_df.group == 1)].frame
+                self.max_num_steps = self.meta_df[(self.meta_df.type == "street_segment") & (self.meta_df.group == 1)].shape[0]
+            else:
+                frames = self.meta_df[(self.meta_df.type == "street_segment") & self.meta_df.frame.isin(goals.frame)].frame
             goals_on_street_segment = goals[goals.frame.isin(frames)]
             goal = goals_on_street_segment.loc[np.random.choice(goals_on_street_segment.frame.values.tolist())]
             segment_group = self.meta_df[self.meta_df.frame == goal.frame.iloc[0]].group.iloc[0]
@@ -230,7 +234,7 @@ class HyruleEnv(gym.GoalEnv):
         for k, v in obs.items():
             if k != "image":
                 s = s + ", " + str(k) + ": " + str(v)
-        # print(self.agent_loc)
+        print(self.agent_loc)
         # print(s)
         # print(obs)
         return obs, reward, done, {}
@@ -382,7 +386,7 @@ class HyruleEnv(gym.GoalEnv):
         """
         if self.shaped_reward:
             cur_spl = len(self.shortest_path_length())
-            # print("SPL:", cur_spl)
+            print("SPL:", cur_spl)
             if done and self.is_successful_trajectory(x):
                 reward = 2.0
             elif done and not self.is_successful_trajectory(x):
