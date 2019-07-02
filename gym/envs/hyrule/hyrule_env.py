@@ -75,7 +75,7 @@ class HyruleEnv(gym.GoalEnv):
         return res
 
     def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3),
-                 shaped_reward=True, can_noop=False, can_done=False, store_test=False, test_mode=False):
+                 shaped_reward=True, can_noop=False, can_done=False, store_test=False, test_mode=True):
         self.viewer = None
         self.can_noop = can_noop
         self.can_done = can_done
@@ -106,7 +106,7 @@ class HyruleEnv(gym.GoalEnv):
         self.weighted = True
 
         self.shaped_reward = shaped_reward
-        self.max_num_steps = 500
+        self.max_num_steps = 100
         self.num_steps_taken = 0
 
         self.store_test = store_test
@@ -389,7 +389,7 @@ class HyruleEnv(gym.GoalEnv):
                 reward = -2.0
             elif self.prev_spl - cur_spl > 0:
                 reward = 1 #- (self.num_steps_taken / self.start_spl)
-            elif self.prev_spl - cur_spl < 0:
+            elif self.prev_spl - cur_spl <= 0:
                 reward = -1
             else:
                 reward = 0.0
