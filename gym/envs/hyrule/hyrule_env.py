@@ -224,7 +224,8 @@ class HyruleEnv(gym.GoalEnv):
             reward = self.compute_reward(x, {}, done)
             #print("Current reward: " + str(reward))
         self.agent_gps = self.sample_gps(self.meta_df.loc[self.agent_loc])
-        rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
+        rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1],
+                   self.target_gps[0], self.target_gps[1]]
         obs = {"image": image, "mission": self.goal_address, "rel_gps": rel_gps, "visible_text": visible_text}
         self.num_steps_taken += 1
         if self.num_steps_taken >= self.max_num_steps and done == False:
@@ -315,7 +316,8 @@ class HyruleEnv(gym.GoalEnv):
         self.agent_gps = self.sample_gps(self.meta_df.loc[self.agent_loc])
         self.target_gps = self.sample_gps(self.meta_df.loc[self.goal_idx], scale=3.0)
         image, x, w = self._get_image()
-        rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1]]
+        rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1],
+                   self.target_gps[0], self.target_gps[1]]
         return {"image": image, "mission": self.goal_address, "rel_gps": rel_gps, "visible_text": self.get_visible_text(x, w)}
 
     def angles_to_turn(self, cur, target):
@@ -476,4 +478,4 @@ class HyruleEnv(gym.GoalEnv):
         self.goal_address = test_task.item().get('goal_info')['address']
         self.goal_id = test_task.item().get('goal_info')['goal_id']
         self.prev_spl = test_task.item().get('spl')
-        print("Test Task SPL:", test_task.item().get('spl'))
+        #print("Test Task SPL:", test_task.item().get('spl'))
