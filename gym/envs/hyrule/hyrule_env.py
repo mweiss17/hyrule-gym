@@ -74,9 +74,10 @@ class HyruleEnv(gym.GoalEnv):
         res = (res == street_name).astype(int)
         return res
 
-    def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(84, 84, 3),
+    def __init__(self, path="/data/data/mini-corl/processed/", obs_type='image', obs_shape=(4, 84, 84),
                  shaped_reward=True, can_noop=False, can_done=False, store_test=False, test_mode=False):
         self.viewer = None
+        self.needs_reset = True
         self.can_noop = can_noop
         self.can_done = can_done
         if can_noop:
@@ -235,9 +236,12 @@ class HyruleEnv(gym.GoalEnv):
         for k, v in obs.items():
             if k != "image":
                 s = s + ", " + str(k) + ": " + str(v)
-        print(self.agent_loc)
+        if done:
+            self.needs_reset = True
+        # print(self.agent_loc)
         # print(s)
         # print(obs)
+        obs = self.obs_wrap(obs)
         return obs, reward, done, {}
 
 
@@ -251,13 +255,13 @@ class HyruleEnv(gym.GoalEnv):
             obs_shape = self.observation_space.shape
 
         pano_rotation = self.norm_angle(self.meta_df.loc[self.agent_loc, 'angle'][0] + 90)
-        w = obs_shape[0]
-        y = img.shape[0] - obs_shape[0]
-        h = obs_shape[0]
+        w = obs_shape[1]
+        y = img.shape[0] - obs_shape[1]
+        h = obs_shape[2]
         x = int((self.norm_angle(-self.agent_dir + pano_rotation) + 180)/360 * img.shape[1])
-
+        img = img.transpose()
         if (x + w) % img.shape[1] != (x + w):
-            res_img = np.zeros(obs_shape)
+            res_img = np.zeros((3, 84, 84))
             offset = img.shape[1] - (x % img.shape[1])
             res_img[:, :offset] = img[y:y+h, x:x + offset]
             res_img[:, offset:] = img[y:y+h, :(x + w) % img.shape[1]]
@@ -303,6 +307,7 @@ class HyruleEnv(gym.GoalEnv):
         return (x, y)
 
     def reset(self):
+        self.needs_reset = False
         self.num_steps_taken = 0
         if self.test_mode:
             self.load_test_task()
@@ -318,7 +323,15 @@ class HyruleEnv(gym.GoalEnv):
         image, x, w = self._get_image()
         rel_gps = [self.target_gps[0] - self.agent_gps[0], self.target_gps[1] - self.agent_gps[1],
                    self.target_gps[0], self.target_gps[1]]
-        return {"image": image, "mission": self.goal_address, "rel_gps": rel_gps, "visible_text": self.get_visible_text(x, w)}
+        obs = {"image": image, "mission": self.goal_address, "rel_gps": rel_gps, "visible_text": self.get_visible_text(x, w)}
+        obs = self.obs_wrap(obs)
+        return obs
+
+    def obs_wrap(self, obs):
+        coord_holder = np.zeros((1, 84, 84), dtype=np.float32)
+        coord_holder[0, 0, :4] = obs['rel_gps']
+        out = np.concatenate((obs['image'], coord_holder), axis=0)
+        return out
 
     def angles_to_turn(self, cur, target):
         go_left = []
@@ -388,7 +401,7 @@ class HyruleEnv(gym.GoalEnv):
         """
         if self.shaped_reward:
             cur_spl = len(self.shortest_path_length())
-            print("SPL:", cur_spl)
+            # print("SPL:", cur_spl)
             if done and self.is_successful_trajectory(x):
                 reward = 2.0
             elif done and not self.is_successful_trajectory(x):
