@@ -87,7 +87,7 @@ class HyruleEnv(gym.GoalEnv):
 
         self._action_set = HyruleEnv.Actions
         self.action_space = spaces.Discrete(len(self._action_set))
-        self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
+        self.observation_space = spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.float32)
         #path = os.getcwd() + path
         self.mydir = "/".join(os.getcwd().split("/")[:-1]) + "/hyrule-gym" #"/home/rogerg/Documents/autonomous_pedestrian_project/navi/hyrule-gym"
         path = self.mydir + path
@@ -196,7 +196,6 @@ class HyruleEnv(gym.GoalEnv):
 
     def set_difficulty(self, difficulty, weighted=False):
         self.difficulty = difficulty
-        # self.weighted = weighted
 
     def step(self, a):
         done = False
